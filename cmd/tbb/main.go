@@ -2,8 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -21,9 +19,9 @@ func main() {
 
 	tbbCmd.AddCommand(versionCmd)
 	tbbCmd.AddCommand(balancesCmd())
+	tbbCmd.AddCommand(txCmd())
 
 	if err := tbbCmd.Execute(); err != nil {
-		fmt.Println(os.Stderr, err)
-		os.Exit(1)
+		fatal(err)
 	}
 }

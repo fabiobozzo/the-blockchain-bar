@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"the-blockchain-bar/database"
 
 	"github.com/spf13/cobra"
@@ -31,8 +30,7 @@ var balancesListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		state, err := database.NewStateFromDisk()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			fatal(err)
 		}
 		defer state.Close()
 
