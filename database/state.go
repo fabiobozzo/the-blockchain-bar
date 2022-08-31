@@ -2,23 +2,29 @@ package database
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 )
+
+type Snapshot [32]byte
 
 type State struct {
 	Balances  map[Account]uint
 	txMemPool []Tx
 
-	dbFile *os.File
+	dbFile   *os.File
+	snapshot Snapshot
 }
 
 func NewStateFromDisk() (*State, error) {
 	state := &State{
 		Balances:  map[Account]uint{},
 		txMemPool: make([]Tx, 0),
+		snapshot:  Snapshot{},
 	}
 
 	cwd, err := os.Getwd()
@@ -57,6 +63,10 @@ func NewStateFromDisk() (*State, error) {
 		}
 	}
 
+	if err = state.doSnapshot(); err != nil {
+		return nil, err
+	}
+
 	return state, nil
 }
 
@@ -70,28 +80,39 @@ func (s *State) Add(tx Tx) error {
 	return nil
 }
 
-func (s *State) Persist() error {
+func (s *State) Persist() (snapshot Snapshot, err error) {
 	memPoolCopy := make([]Tx, len(s.txMemPool))
 	copy(memPoolCopy, s.txMemPool)
 
 	for i := 0; i < len(memPoolCopy); i++ {
 		txJson, err := json.Marshal(memPoolCopy[i])
 		if err != nil {
-			return err
+			return snapshot, err
 		}
 
+		fmt.Printf("Persisting new TX to disk:\n")
+		fmt.Printf("\t%s\n", txJson)
 		if _, err := s.dbFile.Write(append(txJson, '\n')); err != nil {
-			return err
+			return snapshot, err
 		}
+
+		if err := s.doSnapshot(); err != nil {
+			return snapshot, err
+		}
+		fmt.Printf("New DB Snapshot: %x\n", s.snapshot)
 
 		s.txMemPool = s.txMemPool[1:]
 	}
 
-	return nil
+	return s.snapshot, nil
 }
 
 func (s *State) Close() error {
 	return s.dbFile.Close()
+}
+
+func (s *State) LatestSnapshot() Snapshot {
+	return s.snapshot
 }
 
 func (s *State) apply(tx Tx) error {
@@ -101,12 +122,27 @@ func (s *State) apply(tx Tx) error {
 		return nil
 	}
 
-	if tx.Value > s.Balances[tx.From] {
+	if s.Balances[tx.From]-tx.Value < 0 {
 		return fmt.Errorf("insufficient balance for tx on account: %s", tx.From)
 	}
 
 	s.Balances[tx.From] -= tx.Value
 	s.Balances[tx.To] += tx.Value
+
+	return nil
+}
+
+func (s *State) doSnapshot() error {
+	if _, err := s.dbFile.Seek(0, 0); err != nil {
+		return err
+	}
+
+	txsData, err := ioutil.ReadAll(s.dbFile)
+	if err != nil {
+		return err
+	}
+
+	s.snapshot = sha256.Sum256(txsData)
 
 	return nil
 }

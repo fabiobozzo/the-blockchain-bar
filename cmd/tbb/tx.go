@@ -56,11 +56,11 @@ func txAddCmd() *cobra.Command {
 				fatal(err)
 			}
 
-			if err := state.Persist(); err != nil {
+			if _, err := state.Persist(); err != nil {
 				fatal(err)
 			}
 
-			fmt.Println("TX successfully added to the ledger.")
+			fmt.Println("TX successfully persisted to the ledger.")
 		},
 	}
 
