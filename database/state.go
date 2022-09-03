@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-type Snapshot [32]byte
-
 type State struct {
 	Balances  map[Account]uint
 	txMemPool []Tx
