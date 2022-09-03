@@ -1,15 +1,19 @@
 package database
 
 import (
+	_ "embed"
 	"encoding/json"
 	"io/ioutil"
 )
+
+//go:embed genesis.json
+var genesisJson string
 
 type Genesis struct {
 	Balances map[Account]uint `json:"balances"`
 }
 
-func loadGenesisFromFile(path string) (Genesis, error) {
+func loadGenesis(path string) (Genesis, error) {
 	var loadedGenesis Genesis
 
 	fileContent, err := ioutil.ReadFile(path)
@@ -20,4 +24,8 @@ func loadGenesisFromFile(path string) (Genesis, error) {
 	err = json.Unmarshal(fileContent, &loadedGenesis)
 
 	return loadedGenesis, err
+}
+
+func writeGenesisToDisk(path string) error {
+	return ioutil.WriteFile(path, []byte(genesisJson), 0644)
 }

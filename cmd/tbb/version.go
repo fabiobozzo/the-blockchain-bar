@@ -8,8 +8,8 @@ import (
 
 const Major = "0"
 const Minor = "4"
-const Fix = "0"
-const Verbal = "Blockchain"
+const Fix = "5"
+const Verbal = "Flexible DataDir"
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
