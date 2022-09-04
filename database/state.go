@@ -34,6 +34,7 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 		Balances:        map[Account]uint{},
 		txMemPool:       make([]Tx, 0),
 		latestBlockHash: Hash{},
+		latestBlock:     Block{},
 	}
 
 	for account, balance := range genesis.Balances {
@@ -53,6 +54,10 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 		}
 
 		blockFsJson := scanner.Bytes()
+		if len(blockFsJson) == 0 {
+			break
+		}
+
 		var blockFs BlockFS
 
 		if err = json.Unmarshal(blockFsJson, &blockFs); err != nil {
@@ -64,6 +69,7 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 		}
 
 		state.latestBlockHash = blockFs.Key
+		state.latestBlock = blockFs.Value
 	}
 
 	return state, nil
@@ -90,8 +96,13 @@ func (s *State) AddBlock(b Block) error {
 }
 
 func (s *State) Persist() (hash Hash, err error) {
+	latestBlockHash, err := s.latestBlock.Hash()
+	if err != nil {
+		return Hash{}, err
+	}
+
 	block := NewBlock(
-		s.latestBlockHash,
+		latestBlockHash,
 		s.latestBlock.Header.Number+1,
 		uint64(time.Now().Unix()),
 		s.txMemPool,
@@ -116,9 +127,10 @@ func (s *State) Persist() (hash Hash, err error) {
 	}
 
 	s.latestBlockHash = blockHash
+	s.latestBlock = block
 	s.txMemPool = []Tx{}
 
-	return s.latestBlockHash, nil
+	return latestBlockHash, nil
 }
 
 func (s *State) Close() error {
@@ -127,6 +139,10 @@ func (s *State) Close() error {
 
 func (s *State) LatestBlockHash() Hash {
 	return s.latestBlockHash
+}
+
+func (s *State) LatestBlock() Block {
+	return s.latestBlock
 }
 
 func (s *State) applyBlock(b Block) error {
