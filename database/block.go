@@ -24,11 +24,12 @@ type Block struct {
 
 type BlockHeader struct {
 	Parent Hash   `json:"parent"` // parent block reference
+	Number uint64 `json:"number"`
 	Time   uint64 `json:"time"`
 }
 
-func NewBlock(parent Hash, time uint64, txs []Tx) Block {
-	return Block{BlockHeader{parent, time}, txs}
+func NewBlock(parent Hash, number, time uint64, txs []Tx) Block {
+	return Block{BlockHeader{parent, number, time}, txs}
 }
 
 func (b Block) Hash() (hash Hash, err error) {

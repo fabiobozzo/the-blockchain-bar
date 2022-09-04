@@ -12,16 +12,14 @@ type State struct {
 	Balances  map[Account]uint
 	txMemPool []Tx
 
-	dbFile          *os.File
+	dbFile *os.File
+
+	latestBlock     Block
 	latestBlockHash Hash
 }
 
 func NewStateFromDisk(dataDir string) (*State, error) {
-	state := &State{
-		Balances:        map[Account]uint{},
-		txMemPool:       make([]Tx, 0),
-		latestBlockHash: Hash{},
-	}
+	dataDir = ExpandPath(dataDir)
 
 	if err := initDataDirIfNotExists(dataDir); err != nil {
 		return nil, err
@@ -30,6 +28,12 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 	genesis, err := loadGenesis(getGenesisJsonFilePath(dataDir))
 	if err != nil {
 		return nil, err
+	}
+
+	state := &State{
+		Balances:        map[Account]uint{},
+		txMemPool:       make([]Tx, 0),
+		latestBlockHash: Hash{},
 	}
 
 	for account, balance := range genesis.Balances {
@@ -88,6 +92,7 @@ func (s *State) AddBlock(b Block) error {
 func (s *State) Persist() (hash Hash, err error) {
 	block := NewBlock(
 		s.latestBlockHash,
+		s.latestBlock.Header.Number+1,
 		uint64(time.Now().Unix()),
 		s.txMemPool,
 	)
