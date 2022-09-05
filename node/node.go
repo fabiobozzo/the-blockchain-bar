@@ -26,6 +26,10 @@ func Run(dataDir string) error {
 		txAddHandler(w, r, state)
 	})
 
+	http.HandleFunc("/node/status", func(w http.ResponseWriter, r *http.Request) {
+		statusHandler(w, r, state)
+	})
+
 	return http.ListenAndServe(fmt.Sprintf(":%d", httpPort), nil)
 }
 
@@ -60,4 +64,13 @@ func txAddHandler(w http.ResponseWriter, r *http.Request, state *database.State)
 	}
 
 	writeSuccessfulResponse(w, txAddResponse{hash})
+}
+
+func statusHandler(w http.ResponseWriter, r *http.Request, state *database.State) {
+	res := statusResponse{
+		Hash:   state.LatestBlockHash(),
+		Number: state.LatestBlock().Header.Number,
+	}
+
+	writeSuccessfulResponse(w, res)
 }

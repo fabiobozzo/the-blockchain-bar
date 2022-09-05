@@ -21,3 +21,8 @@ type txAddRequest struct {
 type txAddResponse struct {
 	Hash database.Hash `json:"blockHash"`
 }
+
+type statusResponse struct {
+	Hash   database.Hash `json:"blockHash"`
+	Number uint64        `json:"blockNumber"`
+}
