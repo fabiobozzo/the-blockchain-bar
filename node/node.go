@@ -6,17 +6,45 @@ import (
 	"the-blockchain-bar/database"
 )
 
-const httpPort = 8080
+const DefaultHTTPPort = 8080
 
-func Run(dataDir string) error {
-	fmt.Println(fmt.Sprintf("Listening on HTTP port: %d", httpPort))
+type PeerNode struct {
+	IP          string `json:"ip"`
+	Port        uint64 `json:"port"`
+	IsBootstrap bool   `json:"isBootstrap"`
+	IsActive    bool   `json:"isActive"`
+}
 
-	state, err := database.NewStateFromDisk(dataDir)
+type Node struct {
+	dataDir    string
+	port       uint64
+	state      *database.State
+	knownPeers []PeerNode
+}
+
+func New(dataDir string, port uint64, bootstrap PeerNode) *Node {
+	return &Node{
+		dataDir:    dataDir,
+		port:       port,
+		knownPeers: []PeerNode{bootstrap},
+	}
+}
+
+func NewPeerNode(ip string, port uint64, isBootstrap bool, isActive bool) PeerNode {
+	return PeerNode{ip, port, isBootstrap, isActive}
+}
+
+func (n *Node) Run() error {
+	fmt.Println(fmt.Sprintf("Listening on HTTP port: %d", DefaultHTTPPort))
+
+	state, err := database.NewStateFromDisk(n.dataDir)
 	if err != nil {
 		return err
 	}
 
 	defer state.Close()
+
+	n.state = state
 
 	http.HandleFunc("/balances/list", func(w http.ResponseWriter, r *http.Request) {
 		listBalancesHandler(w, r, state)
@@ -27,50 +55,8 @@ func Run(dataDir string) error {
 	})
 
 	http.HandleFunc("/node/status", func(w http.ResponseWriter, r *http.Request) {
-		statusHandler(w, r, state)
+		statusHandler(w, r, n)
 	})
 
-	return http.ListenAndServe(fmt.Sprintf(":%d", httpPort), nil)
-}
-
-func listBalancesHandler(w http.ResponseWriter, _ *http.Request, state *database.State) {
-	writeSuccessfulResponse(w, balancesResponse{
-		Hash:     state.LatestBlockHash(),
-		Balances: state.Balances,
-	})
-}
-
-func txAddHandler(w http.ResponseWriter, r *http.Request, state *database.State) {
-	req := txAddRequest{}
-	if err := requestFromBody(r, &req); err != nil {
-		writeErrorResponse(w, err)
-
-		return
-	}
-
-	tx := database.NewTx(database.NewAccount(req.From), database.NewAccount(req.To), req.Value, req.Data)
-
-	if err := state.AddTx(tx); err != nil {
-		writeErrorResponse(w, err)
-
-		return
-	}
-
-	hash, err := state.Persist()
-	if err != nil {
-		writeErrorResponse(w, err)
-
-		return
-	}
-
-	writeSuccessfulResponse(w, txAddResponse{hash})
-}
-
-func statusHandler(w http.ResponseWriter, r *http.Request, state *database.State) {
-	res := statusResponse{
-		Hash:   state.LatestBlockHash(),
-		Number: state.LatestBlock().Header.Number,
-	}
-
-	writeSuccessfulResponse(w, res)
+	return http.ListenAndServe(fmt.Sprintf(":%d", DefaultHTTPPort), nil)
 }

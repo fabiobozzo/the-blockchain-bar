@@ -6,7 +6,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const flagDataDir = "datadir"
+const (
+	flagDataDir = "datadir"
+	flagPort    = "port"
+)
 
 var ErrIncorrectUsage = errors.New("incorrect usage of tbb command")
 
