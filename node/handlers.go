@@ -47,3 +47,25 @@ func statusHandler(w http.ResponseWriter, r *http.Request, n *Node) {
 
 	writeSuccessfulResponse(w, res)
 }
+
+func syncHandler(w http.ResponseWriter, r *http.Request, node *Node) {
+	// hash after which new blocks have to be returned
+	reqHash := r.URL.Query().Get(endpointSyncQueryKeyFromBlock)
+
+	hash := database.Hash{}
+	if err := hash.UnmarshalText([]byte(reqHash)); err != nil {
+		writeErrorResponse(w, err)
+
+		return
+	}
+
+	// read newer blocks from db
+	blocks, err := database.GetBlocksAfter(hash, node.dataDir)
+	if err != nil {
+		writeErrorResponse(w, err)
+
+		return
+	}
+
+	writeSuccessfulResponse(w, blocks)
+}

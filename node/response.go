@@ -2,6 +2,8 @@ package node
 
 import (
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"the-blockchain-bar/database"
 )
@@ -20,9 +22,13 @@ type txAddResponse struct {
 }
 
 type statusResponse struct {
-	Hash       database.Hash `json:"blockHash"`
-	Number     uint64        `json:"blockNumber"`
-	KnownPeers []PeerNode    `json:"peersKnown"`
+	Hash       database.Hash       `json:"blockHash"`
+	Number     uint64              `json:"blockNumber"`
+	KnownPeers map[string]PeerNode `json:"peersKnown"`
+}
+
+type syncResponse struct {
+	Blocks []database.Block `json:"blocks"`
 }
 
 func writeSuccessfulResponse(w http.ResponseWriter, content interface{}) {
@@ -43,4 +49,19 @@ func writeErrorResponse(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusInternalServerError)
 	w.Write(jsonErrRes)
+}
+
+func readResponse(r *http.Response, reqBody interface{}) error {
+	reqBodyJson, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return fmt.Errorf("unable to read response body. %s", err.Error())
+	}
+	defer r.Body.Close()
+
+	err = json.Unmarshal(reqBodyJson, reqBody)
+	if err != nil {
+		return fmt.Errorf("unable to unmarshal response body. %s", err.Error())
+	}
+
+	return nil
 }

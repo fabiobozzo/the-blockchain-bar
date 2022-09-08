@@ -19,8 +19,6 @@ type State struct {
 }
 
 func NewStateFromDisk(dataDir string) (*State, error) {
-	dataDir = ExpandPath(dataDir)
-
 	if err := initDataDirIfNotExists(dataDir); err != nil {
 		return nil, err
 	}

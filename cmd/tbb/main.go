@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"the-blockchain-bar/fs"
 
 	"github.com/spf13/cobra"
 )
@@ -40,4 +41,10 @@ func addDefaultRequiredFlags(cmd *cobra.Command) {
 	)
 
 	cmd.MarkFlagRequired(flagDataDir)
+}
+
+func getDataDirFromCmd(cmd *cobra.Command) string {
+	dataDir, _ := cmd.Flags().GetString(flagDataDir)
+
+	return fs.ExpandPath(dataDir)
 }
