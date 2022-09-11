@@ -95,22 +95,34 @@ func (n *Node) joinKnownPeers(peer PeerNode) error {
 
 func (n *Node) syncBlocks(peer PeerNode, status statusResponse) error {
 	localBlockNumber := n.state.LatestBlock().Header.Number
-	if localBlockNumber < status.Number {
-		newBlocksCount := status.Number - localBlockNumber
 
-		fmt.Printf("Found %d new blocks from Peer %s\n", newBlocksCount, peer.TcpAddress())
-
-		blocks, err := fetchBlocksFromPeer(peer, n.state.LatestBlockHash())
-		if err != nil {
-			return err
-		}
-
-		if err := n.state.AddBlocks(blocks); err != nil {
-			return err
-		}
+	// If the peer has no blocks, ignore it
+	if status.Hash.IsEmpty() {
+		return nil
 	}
 
-	return nil
+	// If the peer has less blocks than us, ignore it
+	if status.Number < localBlockNumber {
+		return nil
+	}
+
+	// If it's the genesis block, and we already synced it, then ignore it
+	if status.Number == 0 && !n.state.LatestBlockHash().IsEmpty() {
+		return nil
+	}
+
+	newBlocksCount := status.Number - localBlockNumber
+	if localBlockNumber == 0 && status.Number == 0 { // Display found 1 new block if we sync the genesis block 0
+		newBlocksCount = 1
+	}
+	fmt.Printf("found %d new blocks from peer %s\n", newBlocksCount, peer.TcpAddress())
+
+	blocks, err := fetchBlocksFromPeer(peer, n.state.LatestBlockHash())
+	if err != nil {
+		return err
+	}
+
+	return n.state.AddBlocks(blocks)
 }
 
 func (n *Node) syncKnownPeers(peer PeerNode, status statusResponse) error {
