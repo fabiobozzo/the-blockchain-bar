@@ -16,6 +16,7 @@ type State struct {
 
 	latestBlock     Block
 	latestBlockHash Hash
+	hasGenesisBlock bool
 }
 
 func NewStateFromDisk(dataDir string) (*State, error) {
@@ -33,6 +34,7 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 		txMemPool:       make([]Tx, 0),
 		latestBlockHash: Hash{},
 		latestBlock:     Block{},
+		hasGenesisBlock: false,
 	}
 
 	for account, balance := range genesis.Balances {
@@ -68,6 +70,7 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 
 		state.latestBlockHash = blockFs.Key
 		state.latestBlock = blockFs.Value
+		state.hasGenesisBlock = true
 	}
 
 	return state, nil
@@ -79,6 +82,14 @@ func (s *State) LatestBlock() Block {
 
 func (s *State) LatestBlockHash() Hash {
 	return s.latestBlockHash
+}
+
+func (s *State) NextBlockNumber() uint64 {
+	if !s.hasGenesisBlock {
+		return uint64(0)
+	}
+
+	return s.LatestBlock().Header.Number + 1
 }
 
 func (s *State) AddBlocks(blocks []Block) error {
@@ -119,6 +130,7 @@ func (s *State) AddBlock(b Block) (hash Hash, err error) {
 	s.Balances = pendingState.Balances
 	s.latestBlockHash = blockHash
 	s.latestBlock = b
+	s.hasGenesisBlock = true
 
 	return blockHash, nil
 }
@@ -127,6 +139,7 @@ func (s *State) copy() State {
 	c := State{}
 	c.latestBlock = s.latestBlock
 	c.latestBlockHash = s.latestBlockHash
+	c.hasGenesisBlock = s.hasGenesisBlock
 	c.txMemPool = make([]Tx, len(s.txMemPool))
 	c.Balances = make(map[Account]uint)
 
@@ -167,11 +180,11 @@ func (s *State) apply(tx Tx) error {
 func applyBlock(b Block, s State) error {
 	nextExpectedBlockNumber := s.latestBlock.Header.Number + 1
 
-	if b.Header.Number != nextExpectedBlockNumber {
+	if s.hasGenesisBlock && b.Header.Number != nextExpectedBlockNumber {
 		return fmt.Errorf("next expected block must '%d' not '%d'", nextExpectedBlockNumber, b.Header.Number)
 	}
 
-	if s.latestBlock.Header.Number > 0 && reflect.DeepEqual(s.latestBlockHash, b.Header.Parent) {
+	if s.hasGenesisBlock && s.latestBlock.Header.Number > 0 && reflect.DeepEqual(s.latestBlockHash, b.Header.Parent) {
 		return fmt.Errorf("next block parent hash must be '%x' not '%x'", s.latestBlockHash, b.Header.Parent)
 	}
 
