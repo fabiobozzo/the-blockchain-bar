@@ -31,6 +31,11 @@ type syncResponse struct {
 	Blocks []database.Block `json:"blocks"`
 }
 
+type addPeerResponse struct {
+	Success bool   `json:"success"`
+	Error   string `json:"error"`
+}
+
 func writeSuccessfulResponse(w http.ResponseWriter, content interface{}) {
 	contentJson, err := json.Marshal(content)
 	if err != nil {

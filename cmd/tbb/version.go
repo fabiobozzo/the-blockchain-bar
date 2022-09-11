@@ -7,9 +7,9 @@ import (
 )
 
 const Major = "0"
-const Minor = "6"
-const Fix = "1"
-const Verbal = "HTTP API"
+const Minor = "7"
+const Fix = "0"
+const Verbal = "P2P Sync"
 
 var versionCmd = &cobra.Command{
 	Use:   "version",

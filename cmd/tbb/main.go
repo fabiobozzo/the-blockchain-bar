@@ -10,6 +10,7 @@ import (
 const (
 	flagDataDir = "datadir"
 	flagPort    = "port"
+	flagIP      = "ip"
 )
 
 var ErrIncorrectUsage = errors.New("incorrect usage of tbb command")

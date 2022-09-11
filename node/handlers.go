@@ -1,8 +1,11 @@
 package node
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 	"the-blockchain-bar/database"
+	"time"
 )
 
 func listBalancesHandler(w http.ResponseWriter, _ *http.Request, state *database.State) {
@@ -22,13 +25,14 @@ func txAddHandler(w http.ResponseWriter, r *http.Request, state *database.State)
 
 	tx := database.NewTx(database.NewAccount(req.From), database.NewAccount(req.To), req.Value, req.Data)
 
-	if err := state.AddTx(tx); err != nil {
-		writeErrorResponse(w, err)
+	block := database.NewBlock(
+		state.LatestBlockHash(),
+		state.LatestBlock().Header.Number+1,
+		uint64(time.Now().Unix()),
+		[]database.Tx{tx},
+	)
 
-		return
-	}
-
-	hash, err := state.Persist()
+	hash, err := state.AddBlock(block)
 	if err != nil {
 		writeErrorResponse(w, err)
 
@@ -67,5 +71,27 @@ func syncHandler(w http.ResponseWriter, r *http.Request, node *Node) {
 		return
 	}
 
-	writeSuccessfulResponse(w, blocks)
+	writeSuccessfulResponse(w, syncResponse{Blocks: blocks})
+}
+
+func addPeerHandler(w http.ResponseWriter, r *http.Request, node *Node) {
+	peerIP := r.URL.Query().Get(endpointAddPeerQueryKeyIP)
+	peerPortRaw := r.URL.Query().Get(endpointAddPeerQueryKeyPort)
+
+	peerPort, err := strconv.ParseUint(peerPortRaw, 10, 32)
+	if err != nil {
+		writeSuccessfulResponse(w, addPeerResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+
+		return
+	}
+
+	peer := NewPeerNode(peerIP, peerPort, false, true)
+	node.AddPeer(peer)
+
+	fmt.Printf("Peer '%s' was added into KnownPeers\n", peer.TcpAddress())
+
+	writeSuccessfulResponse(w, addPeerResponse{true, ""})
 }

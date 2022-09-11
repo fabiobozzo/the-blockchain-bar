@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
+	"reflect"
 )
 
 type State struct {
@@ -39,8 +39,8 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 		state.Balances[account] = balance
 	}
 
-	txFilePath := getBlocksDbFilePath(dataDir)
-	state.dbFile, err = os.OpenFile(txFilePath, os.O_APPEND|os.O_RDWR, 0600)
+	dbFilepath := getBlocksDbFilePath(dataDir)
+	state.dbFile, err = os.OpenFile(dbFilepath, os.O_APPEND|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 			return nil, err
 		}
 
-		if err := state.applyBlock(blockFs.Value); err != nil {
+		if err := applyTXs(blockFs.Value.TXs, state); err != nil {
 			return nil, err
 		}
 
@@ -73,19 +73,17 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 	return state, nil
 }
 
-func (s *State) AddTx(tx Tx) error {
-	if err := s.apply(tx); err != nil {
-		return err
-	}
-
-	s.txMemPool = append(s.txMemPool, tx)
-
-	return nil
+func (s *State) LatestBlock() Block {
+	return s.latestBlock
 }
 
-func (s *State) AddBlock(b Block) error {
-	for _, tx := range b.TXs {
-		if err := s.AddTx(tx); err != nil {
+func (s *State) LatestBlockHash() Hash {
+	return s.latestBlockHash
+}
+
+func (s *State) AddBlocks(blocks []Block) error {
+	for _, b := range blocks {
+		if _, err := s.AddBlock(b); err != nil {
 			return err
 		}
 	}
@@ -93,25 +91,19 @@ func (s *State) AddBlock(b Block) error {
 	return nil
 }
 
-func (s *State) Persist() (hash Hash, err error) {
-	latestBlockHash, err := s.latestBlock.Hash()
+func (s *State) AddBlock(b Block) (hash Hash, err error) {
+	pendingState := s.copy()
+
+	if err := applyBlock(b, pendingState); err != nil {
+		return Hash{}, err
+	}
+
+	blockHash, err := b.Hash()
 	if err != nil {
 		return Hash{}, err
 	}
 
-	block := NewBlock(
-		latestBlockHash,
-		s.latestBlock.Header.Number+1,
-		uint64(time.Now().Unix()),
-		s.txMemPool,
-	)
-
-	blockHash, err := block.Hash()
-	if err != nil {
-		return Hash{}, err
-	}
-
-	blockFS := BlockFS{blockHash, block}
+	blockFS := BlockFS{blockHash, b}
 	blockFSJson, err := json.Marshal(blockFS)
 	if err != nil {
 		return Hash{}, err
@@ -124,33 +116,33 @@ func (s *State) Persist() (hash Hash, err error) {
 		return Hash{}, err
 	}
 
+	s.Balances = pendingState.Balances
 	s.latestBlockHash = blockHash
-	s.latestBlock = block
-	s.txMemPool = []Tx{}
+	s.latestBlock = b
 
-	return latestBlockHash, nil
+	return blockHash, nil
+}
+
+func (s *State) copy() State {
+	c := State{}
+	c.latestBlock = s.latestBlock
+	c.latestBlockHash = s.latestBlockHash
+	c.txMemPool = make([]Tx, len(s.txMemPool))
+	c.Balances = make(map[Account]uint)
+
+	for acc, balance := range s.Balances {
+		c.Balances[acc] = balance
+	}
+
+	for _, tx := range s.txMemPool {
+		c.txMemPool = append(c.txMemPool, tx)
+	}
+
+	return c
 }
 
 func (s *State) Close() error {
 	return s.dbFile.Close()
-}
-
-func (s *State) LatestBlockHash() Hash {
-	return s.latestBlockHash
-}
-
-func (s *State) LatestBlock() Block {
-	return s.latestBlock
-}
-
-func (s *State) applyBlock(b Block) error {
-	for _, tx := range b.TXs {
-		if err := s.apply(tx); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (s *State) apply(tx Tx) error {
@@ -162,6 +154,49 @@ func (s *State) apply(tx Tx) error {
 
 	if s.Balances[tx.From]-tx.Value < 0 {
 		return fmt.Errorf("insufficient balance for tx on account: %s", tx.From)
+	}
+
+	s.Balances[tx.From] -= tx.Value
+	s.Balances[tx.To] += tx.Value
+
+	return nil
+}
+
+// applyBlock verifies if block can be added to the blockchain.
+// Block metadata are verified as well as transactions within (sufficient balances, etc).
+func applyBlock(b Block, s State) error {
+	nextExpectedBlockNumber := s.latestBlock.Header.Number + 1
+
+	if b.Header.Number != nextExpectedBlockNumber {
+		return fmt.Errorf("next expected block must '%d' not '%d'", nextExpectedBlockNumber, b.Header.Number)
+	}
+
+	if s.latestBlock.Header.Number > 0 && reflect.DeepEqual(s.latestBlockHash, b.Header.Parent) {
+		return fmt.Errorf("next block parent hash must be '%x' not '%x'", s.latestBlockHash, b.Header.Parent)
+	}
+
+	return applyTXs(b.TXs, &s)
+}
+
+func applyTXs(txs []Tx, s *State) error {
+	for _, tx := range txs {
+		err := applyTx(tx, s)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func applyTx(tx Tx, s *State) error {
+	if tx.IsReward() {
+		s.Balances[tx.To] += tx.Value
+		return nil
+	}
+
+	if tx.Value > s.Balances[tx.From] {
+		return fmt.Errorf("wrong TX. Sender '%s' balance is %d TBB. Tx cost is %d TBB", tx.From, s.Balances[tx.From], tx.Value)
 	}
 
 	s.Balances[tx.From] -= tx.Value
