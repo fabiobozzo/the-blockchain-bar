@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 	"the-blockchain-bar/database"
-	"time"
 )
 
 func listBalancesHandler(w http.ResponseWriter, _ *http.Request, state *database.State) {
@@ -15,7 +14,7 @@ func listBalancesHandler(w http.ResponseWriter, _ *http.Request, state *database
 	})
 }
 
-func txAddHandler(w http.ResponseWriter, r *http.Request, state *database.State) {
+func txAddHandler(w http.ResponseWriter, r *http.Request, n *Node) {
 	req := txAddRequest{}
 	if err := requestFromBody(r, &req); err != nil {
 		writeErrorResponse(w, err)
@@ -25,28 +24,21 @@ func txAddHandler(w http.ResponseWriter, r *http.Request, state *database.State)
 
 	tx := database.NewTx(database.NewAccount(req.From), database.NewAccount(req.To), req.Value, req.Data)
 
-	block := database.NewBlock(
-		state.LatestBlockHash(),
-		state.NextBlockNumber(),
-		uint64(time.Now().Unix()),
-		[]database.Tx{tx},
-	)
-
-	hash, err := state.AddBlock(block)
-	if err != nil {
+	if err := n.AddPendingTX(tx, n.info); err != nil {
 		writeErrorResponse(w, err)
 
 		return
 	}
 
-	writeSuccessfulResponse(w, txAddResponse{hash})
+	writeSuccessfulResponse(w, txAddResponse{Success: true})
 }
 
-func statusHandler(w http.ResponseWriter, r *http.Request, n *Node) {
+func statusHandler(w http.ResponseWriter, _ *http.Request, n *Node) {
 	res := statusResponse{
 		Hash:       n.state.LatestBlockHash(),
 		Number:     n.state.LatestBlock().Header.Number,
 		KnownPeers: n.knownPeers,
+		PendingTXs: n.getPendingTXsAsArray(),
 	}
 
 	writeSuccessfulResponse(w, res)

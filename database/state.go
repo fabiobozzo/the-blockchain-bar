@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"reflect"
 )
 
 type State struct {
-	Balances  map[Account]uint
-	txMemPool []Tx
+	Balances map[Account]uint
 
 	dbFile *os.File
 
@@ -31,7 +29,6 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 
 	state := &State{
 		Balances:        map[Account]uint{},
-		txMemPool:       make([]Tx, 0),
 		latestBlockHash: Hash{},
 		latestBlock:     Block{},
 		hasGenesisBlock: false,
@@ -120,7 +117,7 @@ func (s *State) AddBlock(b Block) (hash Hash, err error) {
 		return Hash{}, err
 	}
 
-	fmt.Printf("Persisting new Block to disk:\n")
+	fmt.Printf("\npersisting new Block to disk:\n")
 	fmt.Printf("\t%s\n", blockFSJson)
 
 	if _, err := s.dbFile.Write(append(blockFSJson, '\n')); err != nil {
@@ -140,15 +137,10 @@ func (s *State) copy() State {
 	c.latestBlock = s.latestBlock
 	c.latestBlockHash = s.latestBlockHash
 	c.hasGenesisBlock = s.hasGenesisBlock
-	c.txMemPool = make([]Tx, len(s.txMemPool))
 	c.Balances = make(map[Account]uint)
 
 	for acc, balance := range s.Balances {
 		c.Balances[acc] = balance
-	}
-
-	for _, tx := range s.txMemPool {
-		c.txMemPool = append(c.txMemPool, tx)
 	}
 
 	return c
@@ -184,8 +176,17 @@ func applyBlock(b Block, s State) error {
 		return fmt.Errorf("next expected block must '%d' not '%d'", nextExpectedBlockNumber, b.Header.Number)
 	}
 
-	if s.hasGenesisBlock && s.latestBlock.Header.Number > 0 && reflect.DeepEqual(s.latestBlockHash, b.Header.Parent) {
+	if s.hasGenesisBlock && s.latestBlock.Header.Number > 0 && s.latestBlockHash.Hex() != b.Header.Parent.Hex() {
 		return fmt.Errorf("next block parent hash must be '%x' not '%x'", s.latestBlockHash, b.Header.Parent)
+	}
+
+	hash, err := b.Hash()
+	if err != nil {
+		return err
+	}
+
+	if !IsBlockHashValid(hash) {
+		return fmt.Errorf("invalid block hash %x", hash)
 	}
 
 	return applyTXs(b.TXs, &s)

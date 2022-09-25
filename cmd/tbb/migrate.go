@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"the-blockchain-bar/database"
-	"time"
+	"the-blockchain-bar/miner"
 
 	"github.com/spf13/cobra"
 )
@@ -21,52 +22,23 @@ var migrateCmd = func() *cobra.Command {
 			}
 			defer state.Close()
 
-			block0 := database.NewBlock(
+			pendingBlock := miner.NewPendingBlock(
 				database.Hash{},
 				state.NextBlockNumber(),
-				uint64(time.Now().Unix()),
 				[]database.Tx{
 					database.NewTx("andrej", "andrej", 3, ""),
 					database.NewTx("andrej", "andrej", 700, "reward"),
-				},
-			)
-
-			block0hash, err := state.AddBlock(block0)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
-
-			block1 := database.NewBlock(
-				block0hash,
-				state.NextBlockNumber(),
-				uint64(time.Now().Unix()),
-				[]database.Tx{
 					database.NewTx("andrej", "babayaga", 2000, ""),
 					database.NewTx("andrej", "andrej", 100, "reward"),
 					database.NewTx("babayaga", "andrej", 1, ""),
 					database.NewTx("babayaga", "caesar", 1000, ""),
 					database.NewTx("babayaga", "andrej", 50, ""),
 					database.NewTx("andrej", "andrej", 600, "reward"),
-				},
-			)
-
-			block1hash, err := state.AddBlock(block1)
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
-
-			block2 := database.NewBlock(
-				block1hash,
-				state.NextBlockNumber(),
-				uint64(time.Now().Unix()),
-				[]database.Tx{
 					database.NewTx("andrej", "andrej", 24700, "reward"),
 				},
 			)
 
-			_, err = state.AddBlock(block2)
+			_, err = miner.Mine(context.Background(), pendingBlock)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				os.Exit(1)

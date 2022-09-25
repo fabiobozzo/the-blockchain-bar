@@ -9,7 +9,7 @@ import (
 )
 
 func (n *Node) sync(ctx context.Context) error {
-	ticker := time.NewTicker(45 * time.Second)
+	ticker := time.NewTicker(time.Second * 10)
 	for {
 		select {
 		case <-ticker.C:
@@ -22,15 +22,15 @@ func (n *Node) sync(ctx context.Context) error {
 
 func (n *Node) doSync() {
 	for _, peer := range n.knownPeers {
-		if n.ip == peer.IP && n.port == peer.Port {
+		if n.info.IP == peer.IP && n.info.Port == peer.Port {
 			continue
 		}
 
-		fmt.Printf("Searching for new Peers and their Blocks and Peers: '%s'\n", peer.TcpAddress())
+		fmt.Printf("searching for new peers and their blocks and their known peers: '%s'\n", peer.TcpAddress())
 
 		status, err := queryPeerStatus(peer)
 		if err != nil {
-			fmt.Printf("Peer '%s' was removed from KnownPeers\n", peer.TcpAddress())
+			fmt.Printf("peer '%s' was removed from KnownPeers\n", peer.TcpAddress())
 			n.RemovePeer(peer)
 
 			continue
@@ -44,11 +44,19 @@ func (n *Node) doSync() {
 
 		if err = n.syncBlocks(peer, status); err != nil {
 			fmt.Printf("error syncing new blocks: %s\n", err)
+
 			continue
 		}
 
-		if err := n.syncKnownPeers(peer, status); err != nil {
-			fmt.Printf("ERROR: %s\n", err)
+		if err := n.syncKnownPeers(status); err != nil {
+			fmt.Printf("error syncing new known peers: %s\n", err)
+
+			continue
+		}
+
+		if err := n.syncPendingTXs(peer, status.PendingTXs); err != nil {
+			fmt.Printf("error syncing new pending transactions: %s\n", err)
+
 			continue
 		}
 	}
@@ -64,9 +72,9 @@ func (n *Node) joinKnownPeers(peer PeerNode) error {
 		peer.TcpAddress(),
 		endpointAddPeer,
 		endpointAddPeerQueryKeyIP,
-		n.ip,
+		n.info.IP,
 		endpointAddPeerQueryKeyPort,
-		n.port,
+		n.info.Port,
 	)
 
 	rawResponse, err := http.Get(url)
@@ -122,14 +130,32 @@ func (n *Node) syncBlocks(peer PeerNode, status statusResponse) error {
 		return err
 	}
 
-	return n.state.AddBlocks(blocks)
+	for _, block := range blocks {
+		if _, err = n.state.AddBlock(block); err != nil {
+			return err
+		}
+
+		n.newSyncedBlocks <- block
+	}
+
+	return nil
 }
 
-func (n *Node) syncKnownPeers(peer PeerNode, status statusResponse) error {
+func (n *Node) syncKnownPeers(status statusResponse) error {
 	for _, statusPeer := range status.KnownPeers {
 		if !n.IsKnownPeer(statusPeer) {
 			fmt.Printf("found new peer: %s\n", statusPeer.TcpAddress())
 			n.AddPeer(statusPeer)
+		}
+	}
+
+	return nil
+}
+
+func (n *Node) syncPendingTXs(peer PeerNode, txs []database.Tx) error {
+	for _, tx := range txs {
+		if err := n.AddPendingTX(tx, peer); err != nil {
+			return err
 		}
 	}
 

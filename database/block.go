@@ -3,6 +3,7 @@ package database
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 )
 
 type Block struct {
@@ -13,11 +14,12 @@ type Block struct {
 type BlockHeader struct {
 	Parent Hash   `json:"parent"` // parent block reference
 	Number uint64 `json:"number"`
+	Nonce  uint32 `json:"nonce"`
 	Time   uint64 `json:"time"`
 }
 
-func NewBlock(parent Hash, number, time uint64, txs []Tx) Block {
-	return Block{BlockHeader{parent, number, time}, txs}
+func NewBlock(parent Hash, number uint64, nonce uint32, time uint64, txs []Tx) Block {
+	return Block{BlockHeader{parent, number, nonce, time}, txs}
 }
 
 func (b Block) Hash() (hash Hash, err error) {
@@ -32,4 +34,11 @@ func (b Block) Hash() (hash Hash, err error) {
 type BlockFS struct {
 	Key   Hash  `json:"hash"`
 	Value Block `json:"block"`
+}
+
+func IsBlockHashValid(hash Hash) bool {
+	return fmt.Sprintf("%x", hash[0]) == "0" &&
+		fmt.Sprintf("%x", hash[1]) == "0" &&
+		fmt.Sprintf("%x", hash[2]) == "0" &&
+		fmt.Sprintf("%x", hash[3]) != "0"
 }

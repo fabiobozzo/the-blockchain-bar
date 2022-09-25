@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"the-blockchain-bar/node"
@@ -21,7 +22,7 @@ func runCmd() *cobra.Command {
 			bootstrap := node.NewPeerNode("127.0.0.1", 8080, true, false)
 			theNode := node.New(getDataDirFromCmd(cmd), ip, port, bootstrap)
 
-			if err := theNode.Run(); err != nil {
+			if err := theNode.Run(context.Background()); err != nil {
 				fmt.Println(err)
 				os.Exit(1)
 			}

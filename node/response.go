@@ -18,13 +18,14 @@ type balancesResponse struct {
 }
 
 type txAddResponse struct {
-	Hash database.Hash `json:"blockHash"`
+	Success bool `json:"success"`
 }
 
 type statusResponse struct {
 	Hash       database.Hash       `json:"blockHash"`
 	Number     uint64              `json:"blockNumber"`
 	KnownPeers map[string]PeerNode `json:"peersKnown"`
+	PendingTXs []database.Tx       `json:"pendingTXs"`
 }
 
 type syncResponse struct {
