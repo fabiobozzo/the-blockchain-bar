@@ -6,20 +6,23 @@ import (
 	"fmt"
 )
 
+const BlockReward = 100
+
 type Block struct {
 	Header BlockHeader `json:"header"`  // metadata (parent block hash + timestamp)
 	TXs    []Tx        `json:"payload"` // new transactions only (payload)
 }
 
 type BlockHeader struct {
-	Parent Hash   `json:"parent"` // parent block reference
-	Number uint64 `json:"number"`
-	Nonce  uint32 `json:"nonce"`
-	Time   uint64 `json:"time"`
+	Parent Hash    `json:"parent"` // parent block reference
+	Number uint64  `json:"number"`
+	Nonce  uint32  `json:"nonce"`
+	Time   uint64  `json:"time"`
+	Miner  Account `json:"miner"`
 }
 
-func NewBlock(parent Hash, number uint64, nonce uint32, time uint64, txs []Tx) Block {
-	return Block{BlockHeader{parent, number, nonce, time}, txs}
+func NewBlock(parent Hash, number uint64, nonce uint32, time uint64, miner Account, txs []Tx) Block {
+	return Block{BlockHeader{parent, number, nonce, time, miner}, txs}
 }
 
 func (b Block) Hash() (hash Hash, err error) {

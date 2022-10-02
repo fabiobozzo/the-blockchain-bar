@@ -61,7 +61,7 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 			return nil, err
 		}
 
-		if err := applyTXs(blockFs.Value.TXs, state); err != nil {
+		if err := applyBlock(blockFs.Value, state); err != nil {
 			return nil, err
 		}
 
@@ -102,7 +102,7 @@ func (s *State) AddBlocks(blocks []Block) error {
 func (s *State) AddBlock(b Block) (hash Hash, err error) {
 	pendingState := s.copy()
 
-	if err := applyBlock(b, pendingState); err != nil {
+	if err := applyBlock(b, &pendingState); err != nil {
 		return Hash{}, err
 	}
 
@@ -169,7 +169,7 @@ func (s *State) apply(tx Tx) error {
 
 // applyBlock verifies if block can be added to the blockchain.
 // Block metadata are verified as well as transactions within (sufficient balances, etc).
-func applyBlock(b Block, s State) error {
+func applyBlock(b Block, s *State) error {
 	nextExpectedBlockNumber := s.latestBlock.Header.Number + 1
 
 	if s.hasGenesisBlock && b.Header.Number != nextExpectedBlockNumber {
@@ -189,7 +189,13 @@ func applyBlock(b Block, s State) error {
 		return fmt.Errorf("invalid block hash %x", hash)
 	}
 
-	return applyTXs(b.TXs, &s)
+	if err := applyTXs(b.TXs, s); err != nil {
+		return err
+	}
+
+	s.Balances[b.Header.Miner] += BlockReward
+
+	return nil
 }
 
 func applyTXs(txs []Tx, s *State) error {
@@ -204,11 +210,6 @@ func applyTXs(txs []Tx, s *State) error {
 }
 
 func applyTx(tx Tx, s *State) error {
-	if tx.IsReward() {
-		s.Balances[tx.To] += tx.Value
-		return nil
-	}
-
 	if tx.Value > s.Balances[tx.From] {
 		return fmt.Errorf("wrong TX. Sender '%s' balance is %d TBB. Tx cost is %d TBB", tx.From, s.Balances[tx.From], tx.Value)
 	}

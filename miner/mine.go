@@ -14,11 +14,18 @@ type PendingBlock struct {
 	parent database.Hash
 	number uint64
 	time   uint64
+	miner  database.Account
 	txs    []database.Tx
 }
 
-func NewPendingBlock(parent database.Hash, number uint64, txs []database.Tx) PendingBlock {
-	return PendingBlock{parent: parent, number: number, time: uint64(time.Now().Unix()), txs: txs}
+func NewPendingBlock(parent database.Hash, number uint64, miner database.Account, txs []database.Tx) PendingBlock {
+	return PendingBlock{
+		parent: parent,
+		number: number,
+		time:   uint64(time.Now().Unix()),
+		miner:  miner,
+		txs:    txs,
+	}
 }
 
 func Mine(ctx context.Context, pb PendingBlock) (database.Block, error) {
@@ -48,7 +55,7 @@ func Mine(ctx context.Context, pb PendingBlock) (database.Block, error) {
 			fmt.Printf("mining %d pending transactions. attempt no: %d\n", len(pb.txs), attempt)
 		}
 
-		block = database.NewBlock(pb.parent, pb.number, nonce, pb.time, pb.txs)
+		block = database.NewBlock(pb.parent, pb.number, nonce, pb.time, pb.miner, pb.txs)
 		blockHash, err := block.Hash()
 		if err != nil {
 			return database.Block{}, fmt.Errorf("could not mine block: %s", err.Error())
@@ -58,10 +65,11 @@ func Mine(ctx context.Context, pb PendingBlock) (database.Block, error) {
 	}
 
 	fmt.Printf("\nmined new block '%x' using proof-of-work %s:\n", hash, utils.Unicode("\\U1F389"))
-	fmt.Printf("\theight: '%v'\n", pb.number)
-	fmt.Printf("\tnonce: '%v'\n", nonce)
-	fmt.Printf("\tcreated: '%v'\n", pb.time)
-	fmt.Printf("\tparent: '%v'\n\n", pb.parent.Hex())
+	fmt.Printf("\theight: '%v'\n", block.Header.Number)
+	fmt.Printf("\tnonce: '%v'\n", block.Header.Nonce)
+	fmt.Printf("\tcreated: '%v'\n", block.Header.Time)
+	fmt.Printf("\tminer: '%v'\n\n", block.Header.Miner)
+	fmt.Printf("\tparent: '%v'\n\n", block.Header.Parent.Hex())
 	fmt.Printf("\tattempt: '%v'\n", attempt)
 	fmt.Printf("\ttime: %s\n\n", time.Since(start))
 

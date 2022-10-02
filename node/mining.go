@@ -47,7 +47,9 @@ func (n *Node) minePendingTXs(ctx context.Context) error {
 	blockToMine := miner.NewPendingBlock(
 		n.state.LatestBlockHash(),
 		n.state.LatestBlock().Header.Number+1,
-		n.getPendingTXsAsArray())
+		n.info.Account,
+		n.getPendingTXsAsArray(),
+	)
 
 	minedBlock, err := miner.Mine(ctx, blockToMine)
 	if err != nil {

@@ -11,23 +11,26 @@ import (
 const (
 	DefaultIP       = "127.0.0.1"
 	DefaultHTTPPort = 8080
+	DefaultMiner    = ""
 
 	endpointStatus = "/node/status"
 
 	endpointSync                  = "/node/sync"
 	endpointSyncQueryKeyFromBlock = "fromBlock"
 
-	endpointAddPeer             = "/node/peer"
-	endpointAddPeerQueryKeyIP   = "ip"
-	endpointAddPeerQueryKeyPort = "port"
+	endpointAddPeer              = "/node/peer"
+	endpointAddPeerQueryKeyIP    = "ip"
+	endpointAddPeerQueryKeyPort  = "port"
+	endpointAddPeerQueryKeyMiner = "miner"
 
 	miningIntervalSeconds = 10
 )
 
 type PeerNode struct {
-	IP          string `json:"ip"`
-	Port        uint64 `json:"port"`
-	IsBootstrap bool   `json:"isBootstrap"`
+	IP          string           `json:"ip"`
+	Port        uint64           `json:"port"`
+	IsBootstrap bool             `json:"isBootstrap"`
+	Account     database.Account `json:"account"`
 
 	// Whenever my node already established connection, sync with this Peer
 	connected bool
@@ -45,13 +48,13 @@ type Node struct {
 	isMining        bool
 }
 
-func New(dataDir string, ip string, port uint64, bootstrap PeerNode) *Node {
+func New(dataDir string, ip string, port uint64, account database.Account, bootstrap PeerNode) *Node {
 	knownPeers := make(map[string]PeerNode)
 	knownPeers[bootstrap.TcpAddress()] = bootstrap
 
 	return &Node{
 		dataDir:         dataDir,
-		info:            NewPeerNode(ip, port, false, true),
+		info:            NewPeerNode(ip, port, false, account, true),
 		knownPeers:      knownPeers,
 		pendingTXs:      make(map[string]database.Tx),
 		archivedTXs:     make(map[string]database.Tx),
@@ -61,8 +64,8 @@ func New(dataDir string, ip string, port uint64, bootstrap PeerNode) *Node {
 	}
 }
 
-func NewPeerNode(ip string, port uint64, isBootstrap bool, connected bool) PeerNode {
-	return PeerNode{ip, port, isBootstrap, connected}
+func NewPeerNode(ip string, port uint64, isBootstrap bool, account database.Account, connected bool) PeerNode {
+	return PeerNode{ip, port, isBootstrap, account, connected}
 }
 
 func (p PeerNode) TcpAddress() string {

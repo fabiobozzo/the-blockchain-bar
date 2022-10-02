@@ -11,6 +11,7 @@ const (
 	flagDataDir = "datadir"
 	flagPort    = "port"
 	flagIP      = "ip"
+	flagMiner   = "miner"
 )
 
 var ErrIncorrectUsage = errors.New("incorrect usage of tbb command")

@@ -69,6 +69,7 @@ func syncHandler(w http.ResponseWriter, r *http.Request, node *Node) {
 func addPeerHandler(w http.ResponseWriter, r *http.Request, node *Node) {
 	peerIP := r.URL.Query().Get(endpointAddPeerQueryKeyIP)
 	peerPortRaw := r.URL.Query().Get(endpointAddPeerQueryKeyPort)
+	minerRaw := r.URL.Query().Get(endpointAddPeerQueryKeyMiner)
 
 	peerPort, err := strconv.ParseUint(peerPortRaw, 10, 32)
 	if err != nil {
@@ -80,10 +81,10 @@ func addPeerHandler(w http.ResponseWriter, r *http.Request, node *Node) {
 		return
 	}
 
-	peer := NewPeerNode(peerIP, peerPort, false, true)
+	peer := NewPeerNode(peerIP, peerPort, false, database.NewAccount(minerRaw), true)
 	node.AddPeer(peer)
 
-	fmt.Printf("Peer '%s' was added into KnownPeers\n", peer.TcpAddress())
+	fmt.Printf("peer '%s' was added to known peers\n", peer.TcpAddress())
 
 	writeSuccessfulResponse(w, addPeerResponse{true, ""})
 }
