@@ -120,6 +120,10 @@ func (n *Node) Run(ctx context.Context) error {
 	return server.ListenAndServe()
 }
 
+func (n *Node) LatestBlockHash() database.Hash {
+	return n.state.LatestBlockHash()
+}
+
 func (n *Node) AddPeer(peer PeerNode) {
 	n.knownPeers[peer.TcpAddress()] = peer
 }

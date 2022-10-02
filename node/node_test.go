@@ -20,12 +20,14 @@ func TestNode_Run(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	http.DefaultServeMux = new(http.ServeMux)
+
 	n := New(dataDir, "127.0.0.1", 8085, database.NewAccount("andrej"), PeerNode{})
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 
-	if err := n.Run(ctx); err.Error() != http.ErrServerClosed.Error() {
-		t.Fatalf("node server was suppose to close after 5s, instead: %s", err.Error())
+	if err := n.Run(ctx); err != http.ErrServerClosed {
+		t.Fatalf("node server was suppose to close after 5s, instead: %s", err)
 	}
 }
 
@@ -34,6 +36,8 @@ func TestNode_Mining(t *testing.T) {
 	if err := utils.RemoveDir(dataDir); err != nil {
 		t.Fatal(err)
 	}
+
+	http.DefaultServeMux = new(http.ServeMux)
 
 	n := New(dataDir, "127.0.0.1", 8085, database.NewAccount("andrej"), PeerNode{})
 	ctx, closeNode := context.WithTimeout(context.Background(), time.Minute*15)
@@ -79,6 +83,8 @@ func TestNode_MiningStopsOnNewSyncedBlock(t *testing.T) {
 	if err := utils.RemoveDir(dataDir); err != nil {
 		t.Fatal(err)
 	}
+
+	http.DefaultServeMux = new(http.ServeMux)
 
 	andrejAccount := database.NewAccount("andrej")
 	babayagaAccount := database.NewAccount("babayaga")

@@ -82,9 +82,12 @@ func (n *Node) removeMinedPendingTXs(block database.Block) {
 }
 
 func (n *Node) getPendingTXsAsArray() []database.Tx {
-	txs := make([]database.Tx, 0)
+	txs := make([]database.Tx, len(n.pendingTXs))
+
+	i := 0
 	for _, tx := range n.pendingTXs {
-		txs = append(txs, tx)
+		txs[i] = tx
+		i++
 	}
 
 	return txs
