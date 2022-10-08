@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"the-blockchain-bar/database"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type errorResponse struct {
@@ -13,8 +15,8 @@ type errorResponse struct {
 }
 
 type balancesResponse struct {
-	Hash     database.Hash             `json:"blockHash"`
-	Balances map[database.Account]uint `json:"balances"`
+	Hash     database.Hash           `json:"blockHash"`
+	Balances map[common.Address]uint `json:"balances"`
 }
 
 type txAddResponse struct {

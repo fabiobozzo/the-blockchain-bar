@@ -6,12 +6,18 @@ import (
 	"fmt"
 	"net/http"
 	"the-blockchain-bar/database"
+	"the-blockchain-bar/wallet"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 const (
-	DefaultIP       = "127.0.0.1"
-	DefaultHTTPPort = 8080
-	DefaultMiner    = ""
+	DefaultIP            = "127.0.0.1"
+	DefaultHTTPPort      = 8080
+	DefaultBootstrapIp   = "node.tbb.web3.coach"
+	DefaultBootstrapPort = 8080
+	DefaultBootstrapAcc  = wallet.AndrejAccount
+	DefaultMiner         = "0x0000000000000000000000000000000000000000"
 
 	endpointStatus = "/node/status"
 
@@ -27,10 +33,10 @@ const (
 )
 
 type PeerNode struct {
-	IP          string           `json:"ip"`
-	Port        uint64           `json:"port"`
-	IsBootstrap bool             `json:"isBootstrap"`
-	Account     database.Account `json:"account"`
+	IP          string         `json:"ip"`
+	Port        uint64         `json:"port"`
+	IsBootstrap bool           `json:"isBootstrap"`
+	Account     common.Address `json:"account"`
 
 	// Whenever my node already established connection, sync with this Peer
 	connected bool
@@ -48,7 +54,7 @@ type Node struct {
 	isMining        bool
 }
 
-func New(dataDir string, ip string, port uint64, account database.Account, bootstrap PeerNode) *Node {
+func New(dataDir string, ip string, port uint64, account common.Address, bootstrap PeerNode) *Node {
 	knownPeers := make(map[string]PeerNode)
 	knownPeers[bootstrap.TcpAddress()] = bootstrap
 
@@ -64,7 +70,7 @@ func New(dataDir string, ip string, port uint64, account database.Account, boots
 	}
 }
 
-func NewPeerNode(ip string, port uint64, isBootstrap bool, account database.Account, connected bool) PeerNode {
+func NewPeerNode(ip string, port uint64, isBootstrap bool, account common.Address, connected bool) PeerNode {
 	return PeerNode{ip, port, isBootstrap, account, connected}
 }
 

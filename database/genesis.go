@@ -4,13 +4,15 @@ import (
 	_ "embed"
 	"encoding/json"
 	"io/ioutil"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 //go:embed genesis.json
 var genesisJson string
 
 type Genesis struct {
-	Balances map[Account]uint `json:"balances"`
+	Balances map[common.Address]uint `json:"balances"`
 }
 
 func loadGenesis(path string) (Genesis, error) {

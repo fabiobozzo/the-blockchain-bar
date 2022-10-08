@@ -8,10 +8,13 @@ import (
 )
 
 const (
-	flagDataDir = "datadir"
-	flagPort    = "port"
-	flagIP      = "ip"
-	flagMiner   = "miner"
+	flagDataDir       = "datadir"
+	flagPort          = "port"
+	flagIP            = "ip"
+	flagMiner         = "miner"
+	flagBootstrapAcc  = "bootstrap-account"
+	flagBootstrapIp   = "bootstrap-ip"
+	flagBootstrapPort = "bootstrap-port"
 )
 
 var ErrIncorrectUsage = errors.New("incorrect usage of tbb command")
@@ -29,6 +32,7 @@ func main() {
 	tbbCmd.AddCommand(balancesCmd())
 	tbbCmd.AddCommand(runCmd())
 	tbbCmd.AddCommand(migrateCmd())
+	tbbCmd.AddCommand(walletCmd())
 
 	if err := tbbCmd.Execute(); err != nil {
 		fatal(err)

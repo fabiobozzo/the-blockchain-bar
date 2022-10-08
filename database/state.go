@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"os"
 	"sort"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 type State struct {
-	Balances map[Account]uint
+	Balances map[common.Address]uint
 
 	dbFile *os.File
 
@@ -29,7 +31,7 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 	}
 
 	state := &State{
-		Balances:        map[Account]uint{},
+		Balances:        map[common.Address]uint{},
 		latestBlockHash: Hash{},
 		latestBlock:     Block{},
 		hasGenesisBlock: false,
@@ -138,7 +140,7 @@ func (s *State) copy() State {
 	c.latestBlock = s.latestBlock
 	c.latestBlockHash = s.latestBlockHash
 	c.hasGenesisBlock = s.hasGenesisBlock
-	c.Balances = make(map[Account]uint)
+	c.Balances = make(map[common.Address]uint)
 
 	for acc, balance := range s.Balances {
 		c.Balances[acc] = balance
