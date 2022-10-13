@@ -81,8 +81,8 @@ func (n *Node) removeMinedPendingTXs(block database.Block) {
 	}
 }
 
-func (n *Node) getPendingTXsAsArray() []database.Tx {
-	txs := make([]database.Tx, len(n.pendingTXs))
+func (n *Node) getPendingTXsAsArray() []database.SignedTx {
+	txs := make([]database.SignedTx, len(n.pendingTXs))
 
 	i := 0
 	for _, tx := range n.pendingTXs {

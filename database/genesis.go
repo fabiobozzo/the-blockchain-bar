@@ -28,6 +28,6 @@ func loadGenesis(path string) (Genesis, error) {
 	return loadedGenesis, err
 }
 
-func writeGenesisToDisk(path string) error {
-	return ioutil.WriteFile(path, []byte(genesisJson), 0644)
+func writeGenesisToDisk(path string, genesis []byte) error {
+	return ioutil.WriteFile(path, genesis, 0644)
 }

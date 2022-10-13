@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"strconv"
 	"the-blockchain-bar/database"
+	"the-blockchain-bar/wallet"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func listBalancesHandler(w http.ResponseWriter, _ *http.Request, state *database.State) {
@@ -14,7 +17,7 @@ func listBalancesHandler(w http.ResponseWriter, _ *http.Request, state *database
 	})
 }
 
-func txAddHandler(w http.ResponseWriter, r *http.Request, n *Node) {
+func txAddHandler(w http.ResponseWriter, r *http.Request, node *Node) {
 	req := txAddRequest{}
 	if err := requestFromBody(r, &req); err != nil {
 		writeErrorResponse(w, err)
@@ -22,9 +25,34 @@ func txAddHandler(w http.ResponseWriter, r *http.Request, n *Node) {
 		return
 	}
 
-	tx := database.NewTx(database.NewAccount(req.From), database.NewAccount(req.To), req.Value, req.Data)
+	from := database.NewAccount(req.From)
+	to := database.NewAccount(req.To)
 
-	if err := n.AddPendingTX(tx, n.info); err != nil {
+	if from.String() == common.HexToAddress("").String() {
+		writeErrorResponse(w, fmt.Errorf("%s is an invalid 'from' sender", from.String()))
+
+		return
+	}
+
+	if req.KeystorePassword == "" {
+		writeErrorResponse(w, fmt.Errorf("password to decrypt the %s account is required. 'pwd' is empty", from.String()))
+
+		return
+	}
+
+	// Build the unsigned transaction
+	tx := database.NewTx(from, to, req.Value, req.Data)
+
+	// Decrypt the Private key stored in Keystore file and Sign the TX
+	signedTx, err := wallet.SignTxWithKeystoreAccount(tx, from, req.KeystorePassword, wallet.GetKeystoreDirPath(node.dataDir))
+	if err != nil {
+		writeErrorResponse(w, err)
+
+		return
+	}
+
+	// Add TX to the MemPool, ready to be mined
+	if err := node.AddPendingTX(signedTx, node.info); err != nil {
 		writeErrorResponse(w, err)
 
 		return

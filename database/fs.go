@@ -4,10 +4,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"the-blockchain-bar/utils"
 )
 
-func initDataDirIfNotExists(dataDir string) error {
-	if fileExist(getGenesisJsonFilePath(dataDir)) {
+func InitDataDirIfNotExists(dataDir string, genesis []byte) error {
+	if utils.FileExist(getGenesisJsonFilePath(dataDir)) {
 		return nil
 	}
 
@@ -16,8 +17,7 @@ func initDataDirIfNotExists(dataDir string) error {
 		return err
 	}
 
-	gen := getGenesisJsonFilePath(dataDir)
-	if err := writeGenesisToDisk(gen); err != nil {
+	if err := writeGenesisToDisk(getGenesisJsonFilePath(dataDir), genesis); err != nil {
 		return err
 	}
 
@@ -27,27 +27,6 @@ func initDataDirIfNotExists(dataDir string) error {
 	}
 
 	return nil
-}
-
-func fileExist(filePath string) bool {
-	if _, err := os.Stat(filePath); err != nil && os.IsNotExist(err) {
-		return false
-	}
-
-	return true
-}
-
-func dirExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-
-	return true, err
 }
 
 func getDatabaseDirPath(dataDir string) string {

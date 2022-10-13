@@ -1,63 +1,69 @@
 package wallet
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
+	"io/ioutil"
 	"testing"
+	"the-blockchain-bar/database"
+	"the-blockchain-bar/utils"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/davecgh/go-spew/spew"
 )
 
-func TestSignAndVerifySignature(t *testing.T) {
-	// Generate Private Key on the fly
-	privateKey, err := ecdsa.GenerateKey(crypto.S256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
+// The password for testing keystore files:
+// 	./resources/test_andrej--3eb92807f1f91a8d4d85bc908c7f86dcddb1df57
+// 	./resources/test_babayaga--6fdc0d8d15ae6b4ebf45c52fd2aafbcbb19a65c8
+const testKeystoreAccountsPwd = "security123"
+
+func TestSignTxWithKeystoreAccount(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "wallet_test")
+	assert.NoError(t, err)
+
+	defer utils.RemoveDir(tmpDir)
+
+	andrej, err := NewKeystoreAccount(tmpDir, testKeystoreAccountsPwd)
+	assert.NoError(t, err)
+
+	babayaga, err := NewKeystoreAccount(tmpDir, testKeystoreAccountsPwd)
+	assert.NoError(t, err)
+
+	tx := database.NewTx(andrej, babayaga, 100, "")
+
+	signedTx, err := SignTxWithKeystoreAccount(tx, andrej, testKeystoreAccountsPwd, GetKeystoreDirPath(tmpDir))
+	assert.NoError(t, err)
+
+	spew.Dump(signedTx.Encode())
+
+	ok, err := signedTx.IsAuthentic()
+	assert.NoError(t, err)
+
+	if !ok {
+		t.Fatal("the tx was signed by 'from' account and should have been authentic")
 	}
+}
 
-	// Convert the Public Key to bytes with elliptic curve settings
-	publicKey := privateKey.PublicKey
-	publicKeyBytes := elliptic.Marshal(crypto.S256(), publicKey.X, publicKey.Y)
+func TestSignForgedTxWithKeystoreAccount(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "wallet_test")
+	assert.NoError(t, err)
 
-	// Hash the Public Key to 32 bytes
-	publicKeyBytesHash := crypto.Keccak256(publicKeyBytes[1:])
+	defer utils.RemoveDir(tmpDir)
 
-	// The last 20 bytes of the Public Key hash will be its public username
-	account := common.BytesToAddress(publicKeyBytesHash[12:])
+	hacker, err := NewKeystoreAccount(tmpDir, testKeystoreAccountsPwd)
+	assert.NoError(t, err)
 
-	msg := []byte("the Web3Coach students are awesome")
+	babayaga, err := NewKeystoreAccount(tmpDir, testKeystoreAccountsPwd)
+	assert.NoError(t, err)
 
-	// Sign a message -> generate message's signature
-	signature, err := Sign(msg, privateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
+	forgedTx := database.NewTx(babayaga, hacker, 100, "")
 
-	// Recover a Public Key from the signature
-	recoveredPubKey, err := Verify(msg, signature)
-	if err != nil {
-		t.Fatal(err)
-	}
+	signedTx, err := SignTxWithKeystoreAccount(forgedTx, hacker, testKeystoreAccountsPwd, GetKeystoreDirPath(tmpDir))
+	assert.NoError(t, err)
 
-	// Convert the Public Key to username again
-	recoveredPubKeyBytes := elliptic.Marshal(
-		crypto.S256(),
-		recoveredPubKey.X,
-		recoveredPubKey.Y,
-	)
-	recoveredPubKeyBytesHash := crypto.Keccak256(recoveredPubKeyBytes[1:])
-	recoveredAccount := common.BytesToAddress(recoveredPubKeyBytesHash[12:])
+	ok, err := signedTx.IsAuthentic()
+	assert.NoError(t, err)
 
-	// Compare the usernames match:
-	// the pub key derived from the private key and the one recovered from the signed message do match
-	if account.Hex() != recoveredAccount.Hex() {
-		t.Fatalf(
-			"msg was signed by account %s but signature recovery produced an account %s",
-			account.Hex(),
-			recoveredAccount.Hex(),
-		)
+	if ok {
+		t.Fatal("the TX 'from' attribute was forged and should have not be authentic")
 	}
 }

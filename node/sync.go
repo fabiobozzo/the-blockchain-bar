@@ -22,7 +22,7 @@ func (n *Node) sync(ctx context.Context) error {
 
 func (n *Node) doSync() {
 	for _, peer := range n.knownPeers {
-		if n.info.IP == peer.IP && n.info.Port == peer.Port {
+		if (n.info.IP == peer.IP && n.info.Port == peer.Port) || peer.IP == "" {
 			continue
 		}
 
@@ -152,7 +152,7 @@ func (n *Node) syncKnownPeers(status statusResponse) error {
 	return nil
 }
 
-func (n *Node) syncPendingTXs(peer PeerNode, txs []database.Tx) error {
+func (n *Node) syncPendingTXs(peer PeerNode, txs []database.SignedTx) error {
 	for _, tx := range txs {
 		if err := n.AddPendingTX(tx, peer); err != nil {
 			return err

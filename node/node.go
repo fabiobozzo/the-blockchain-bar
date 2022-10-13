@@ -19,7 +19,9 @@ const (
 	DefaultBootstrapAcc  = wallet.AndrejAccount
 	DefaultMiner         = "0x0000000000000000000000000000000000000000"
 
-	endpointStatus = "/node/status"
+	endpointBalances = "/balances/list"
+	endpointStatus   = "/node/status"
+	endpointAddTx    = "/tx/add"
 
 	endpointSync                  = "/node/sync"
 	endpointSyncQueryKeyFromBlock = "fromBlock"
@@ -47,10 +49,10 @@ type Node struct {
 	info            PeerNode
 	state           *database.State
 	knownPeers      map[string]PeerNode
-	pendingTXs      map[string]database.Tx
-	archivedTXs     map[string]database.Tx
+	pendingTXs      map[string]database.SignedTx
+	archivedTXs     map[string]database.SignedTx
 	newSyncedBlocks chan database.Block
-	newPendingTXs   chan database.Tx
+	newPendingTXs   chan database.SignedTx
 	isMining        bool
 }
 
@@ -62,10 +64,10 @@ func New(dataDir string, ip string, port uint64, account common.Address, bootstr
 		dataDir:         dataDir,
 		info:            NewPeerNode(ip, port, false, account, true),
 		knownPeers:      knownPeers,
-		pendingTXs:      make(map[string]database.Tx),
-		archivedTXs:     make(map[string]database.Tx),
+		pendingTXs:      make(map[string]database.SignedTx),
+		archivedTXs:     make(map[string]database.SignedTx),
 		newSyncedBlocks: make(chan database.Block),
-		newPendingTXs:   make(chan database.Tx, 10000),
+		newPendingTXs:   make(chan database.SignedTx, 10000),
 		isMining:        false,
 	}
 }
@@ -96,27 +98,32 @@ func (n *Node) Run(ctx context.Context) error {
 	go n.sync(ctx)
 	go n.mine(ctx)
 
-	http.HandleFunc("/balances/list", func(w http.ResponseWriter, r *http.Request) {
+	router := http.NewServeMux()
+
+	router.HandleFunc(endpointBalances, func(w http.ResponseWriter, r *http.Request) {
 		listBalancesHandler(w, r, state)
 	})
 
-	http.HandleFunc("/tx/add", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc(endpointAddTx, func(w http.ResponseWriter, r *http.Request) {
 		txAddHandler(w, r, n)
 	})
 
-	http.HandleFunc(endpointStatus, func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc(endpointStatus, func(w http.ResponseWriter, r *http.Request) {
 		statusHandler(w, r, n)
 	})
 
-	http.HandleFunc(endpointSync, func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc(endpointSync, func(w http.ResponseWriter, r *http.Request) {
 		syncHandler(w, r, n)
 	})
 
-	http.HandleFunc(endpointAddPeer, func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc(endpointAddPeer, func(w http.ResponseWriter, r *http.Request) {
 		addPeerHandler(w, r, n)
 	})
 
-	server := &http.Server{Addr: fmt.Sprintf(":%d", n.info.Port)}
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", n.info.Port),
+		Handler: router,
+	}
 
 	go func() {
 		<-ctx.Done()
@@ -148,13 +155,13 @@ func (n *Node) IsKnownPeer(peer PeerNode) bool {
 	return isKnownPeer
 }
 
-func (n *Node) AddPendingTX(tx database.Tx, fromPeer PeerNode) error {
-	txHash, err := tx.Hash()
+func (n *Node) AddPendingTX(signedTx database.SignedTx, fromPeer PeerNode) error {
+	txHash, err := signedTx.Hash()
 	if err != nil {
 		return err
 	}
 
-	txJson, err := json.Marshal(tx)
+	txJson, err := json.Marshal(signedTx)
 	if err != nil {
 		return err
 	}
@@ -164,8 +171,8 @@ func (n *Node) AddPendingTX(tx database.Tx, fromPeer PeerNode) error {
 
 	if !isAlreadyPending && !isAlreadyArchived {
 		fmt.Printf("added Pending TX %s from peer %s\n", txJson, fromPeer.TcpAddress())
-		n.pendingTXs[txHash.Hex()] = tx
-		n.newPendingTXs <- tx
+		n.pendingTXs[txHash.Hex()] = signedTx
+		n.newPendingTXs <- signedTx
 	}
 
 	return nil

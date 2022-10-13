@@ -8,10 +8,11 @@ import (
 )
 
 type txAddRequest struct {
-	From  string `json:"from"`
-	To    string `json:"to"`
-	Value uint   `json:"value"`
-	Data  string `json:"data"`
+	From             string `json:"from"`
+	To               string `json:"to"`
+	Value            uint   `json:"value"`
+	Data             string `json:"data"`
+	KeystorePassword string `json:"pwd"`
 }
 
 func requestFromBody(r *http.Request, target interface{}) error {

@@ -4,6 +4,8 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -30,8 +32,36 @@ func ExpandPath(p string) string {
 	return path.Clean(os.ExpandEnv(p))
 }
 
+func FileExist(filePath string) bool {
+	if _, err := os.Stat(filePath); err != nil && os.IsNotExist(err) {
+		return false
+	}
+
+	return true
+}
+
+func DirExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+
+	return true, err
+}
+
 func RemoveDir(path string) error {
 	return os.RemoveAll(path)
+}
+
+func ProjectRootDir() string {
+	_, b, _, _ := runtime.Caller(0)
+
+	dir := filepath.Dir(filepath.Dir(b))
+	return dir
 }
 
 func homeDir() string {
