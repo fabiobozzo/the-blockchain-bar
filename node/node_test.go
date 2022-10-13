@@ -162,7 +162,7 @@ func TestNode_MiningStopsOnNewSyncedBlock(t *testing.T) {
 		for {
 			select {
 			case <-ticker.C:
-				if n.state.LatestBlock().Header.Number == 2 {
+				if n.state.LatestBlock().Header.Number == 1 {
 					closeNode()
 					return
 				}
@@ -200,8 +200,8 @@ func TestNode_MiningStopsOnNewSyncedBlock(t *testing.T) {
 
 	_ = n.Run(ctx)
 
-	if n.state.LatestBlock().Header.Number != 2 {
-		t.Fatal("was suppose to mine 2 pending TX into 2 valid blocks under 30m")
+	if n.state.LatestBlock().Header.Number != 1 {
+		t.Fatal("was suppose to mine 1 pending TX into 1 valid blocks under 30m")
 	}
 
 	if len(n.pendingTXs) != 0 {
