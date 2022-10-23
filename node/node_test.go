@@ -48,10 +48,14 @@ func TestNode_Mining(t *testing.T) {
 
 	// Required for AddPendingTX() to describe from what node the TX came from (local node in this case)
 	localPeerNode := NewPeerNode("127.0.0.1", 8085, false, babayaga, true)
+
+	// Construct a new Node instance and configure Andrej as a miner
 	node := New(dataDir, "127.0.0.1", 8085, andrej, PeerNode{})
 
-	ctx, closeNode := context.WithTimeout(context.Background(), time.Minute*15)
+	// Allow the mining to run for 30 mins, in the worst case
+	ctx, closeNode := context.WithTimeout(context.Background(), time.Minute*30)
 
+	// Schedule a new TX in 3 seconds from now, in a separate thread because the n.Run() few lines below is a blocking call
 	go func() {
 		time.Sleep(time.Second * 1)
 		tx := database.NewTx(andrej, babayaga, 1, 1, "")
@@ -65,6 +69,7 @@ func TestNode_Mining(t *testing.T) {
 		require.NoError(t, node.AddPendingTX(signedTx, localPeerNode))
 	}()
 
+	// Schedule a new TX in 12 seconds from now simulating that it came in - while the first TX is being mined
 	go func() {
 		time.Sleep(time.Second * 30)
 		tx := database.NewTx(andrej, babayaga, 2, 2, "")
@@ -78,13 +83,14 @@ func TestNode_Mining(t *testing.T) {
 		require.NoError(t, node.AddPendingTX(signedTx, localPeerNode))
 	}()
 
+	// Periodically check if we mined the 2 blocks
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 
 		for {
 			select {
 			case <-ticker.C:
-				if node.state.LatestBlock().Header.Number == 2 {
+				if node.state.LatestBlock().Header.Number == 1 {
 					closeNode()
 					return
 				}
@@ -92,9 +98,10 @@ func TestNode_Mining(t *testing.T) {
 		}
 	}()
 
+	// Run the node, mining and everything in a blocking call (hence the go-routines before)
 	_ = node.Run(ctx)
 
-	if node.state.LatestBlock().Header.Number != 2 {
+	if node.state.LatestBlock().Header.Number != 1 {
 		t.Fatal("was suppose to mine 2 pending tx into 2 valid blocks under 30m")
 	}
 }
@@ -243,23 +250,23 @@ func TestNode_MiningStopsOnNewSyncedBlock(t *testing.T) {
 		expectedEndBabayagaBalance := startingBabayagaBalance + tx1.Value + tx2.Value + database.BlockReward
 
 		if endAndrejBalance != expectedEndAndrejBalance {
-			t.Fatalf("Andrej expected end balance is %d not %d", expectedEndAndrejBalance, endAndrejBalance)
+			t.Fatalf("andrej expected end balance is %d not %d", expectedEndAndrejBalance, endAndrejBalance)
 		}
 
 		if endBabayagaBalance != expectedEndBabayagaBalance {
-			t.Fatalf("BabaYaga expected end balance is %d not %d", expectedEndBabayagaBalance, endBabayagaBalance)
+			t.Fatalf("babayaga expected end balance is %d not %d", expectedEndBabayagaBalance, endBabayagaBalance)
 		}
 
-		t.Logf("Starting Andrej balance: %d", startingAndrejBalance)
-		t.Logf("Starting BabaYaga balance: %d", startingBabayagaBalance)
-		t.Logf("Ending Andrej balance: %d", endAndrejBalance)
-		t.Logf("Ending BabaYaga balance: %d", endBabayagaBalance)
+		t.Logf("starting andrej balance: %d", startingAndrejBalance)
+		t.Logf("starting babayaga balance: %d", startingBabayagaBalance)
+		t.Logf("ending andrej balance: %d", endAndrejBalance)
+		t.Logf("ending babayaga balance: %d", endBabayagaBalance)
 	}()
 
 	_ = node.Run(ctx)
 
 	if node.state.LatestBlock().Header.Number != 1 {
-		t.Fatal("was suppose to mine 1 pending TX into 1 valid blocks under 30m")
+		t.Fatal("was suppose to mine 2 pending TX into 2 valid blocks under 30m")
 	}
 
 	if len(node.pendingTXs) != 0 {
