@@ -11,7 +11,8 @@ import (
 )
 
 type State struct {
-	Balances map[common.Address]uint
+	Balances       map[common.Address]uint
+	AccountToNonce map[common.Address]uint
 
 	dbFile *os.File
 
@@ -32,6 +33,7 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 
 	state := &State{
 		Balances:        map[common.Address]uint{},
+		AccountToNonce:  map[common.Address]uint{},
 		latestBlockHash: Hash{},
 		latestBlock:     Block{},
 		hasGenesisBlock: false,
@@ -128,11 +130,20 @@ func (s *State) AddBlock(b Block) (hash Hash, err error) {
 	}
 
 	s.Balances = pendingState.Balances
+	s.AccountToNonce = pendingState.AccountToNonce
 	s.latestBlockHash = blockHash
 	s.latestBlock = b
 	s.hasGenesisBlock = true
 
 	return blockHash, nil
+}
+
+func (s *State) GetNextNonceByAccount(account common.Address) uint {
+	return s.AccountToNonce[account] + 1
+}
+
+func (s *State) Close() error {
+	return s.dbFile.Close()
 }
 
 func (s *State) copy() State {
@@ -141,33 +152,17 @@ func (s *State) copy() State {
 	c.latestBlockHash = s.latestBlockHash
 	c.hasGenesisBlock = s.hasGenesisBlock
 	c.Balances = make(map[common.Address]uint)
+	c.AccountToNonce = make(map[common.Address]uint)
 
 	for acc, balance := range s.Balances {
 		c.Balances[acc] = balance
 	}
 
+	for acc, nonce := range s.AccountToNonce {
+		c.AccountToNonce[acc] = nonce
+	}
+
 	return c
-}
-
-func (s *State) Close() error {
-	return s.dbFile.Close()
-}
-
-func (s *State) apply(tx Tx) error {
-	if tx.IsReward() {
-		s.Balances[tx.To] += tx.Value
-
-		return nil
-	}
-
-	if s.Balances[tx.From]-tx.Value < 0 {
-		return fmt.Errorf("insufficient balance for tx on account: %s", tx.From)
-	}
-
-	s.Balances[tx.From] -= tx.Value
-	s.Balances[tx.To] += tx.Value
-
-	return nil
 }
 
 // applyBlock verifies if block can be added to the blockchain.
@@ -227,12 +222,19 @@ func applyTx(tx SignedTx, s *State) error {
 		return fmt.Errorf("wrong tx. sender '%s' is forged", tx.From.String())
 	}
 
+	expectedNonce := s.GetNextNonceByAccount(tx.From)
+	if tx.Nonce != expectedNonce {
+		return fmt.Errorf("wrong tx. sender '%s' next nonce must be '%d', not '%d'", tx.From.String(), expectedNonce, tx.Nonce)
+	}
+
 	if tx.Value > s.Balances[tx.From] {
 		return fmt.Errorf("wrong TX. Sender '%s' balance is %d TBB. Tx cost is %d TBB", tx.From.String(), s.Balances[tx.From], tx.Value)
 	}
 
 	s.Balances[tx.From] -= tx.Value
 	s.Balances[tx.To] += tx.Value
+
+	s.AccountToNonce[tx.From] = expectedNonce
 
 	return nil
 }

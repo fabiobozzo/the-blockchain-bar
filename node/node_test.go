@@ -40,32 +40,21 @@ func TestNode_Run(t *testing.T) {
 }
 
 func TestNode_Mining(t *testing.T) {
-	andrej := database.NewAccount(resources.TestKsAndrejAccount)
-	babayaga := database.NewAccount(resources.TestKsBabaYagaAccount)
-
-	genesisBalances := make(map[common.Address]uint)
-	genesisBalances[andrej] = 1000000
-	genesis := database.Genesis{Balances: genesisBalances}
-	genesisJson, err := json.Marshal(genesis)
+	dataDir, andrej, babayaga, err := setupTestNodeDir()
 	assert.NoError(t, err)
-
-	dataDir, err := getTestDataDirPath()
-	assert.NoError(t, err)
-	assert.NoError(t, database.InitDataDirIfNotExists(dataDir, genesisJson))
 	defer utils.RemoveDir(dataDir)
-
-	assert.NoError(t, copyKeystoreFilesIntoTestDataDirPath(dataDir))
 
 	http.DefaultServeMux = new(http.ServeMux)
 
-	localPeerNode := NewPeerNode("127.0.0.1", 8085, false, database.NewAccount(""), true)
+	// Required for AddPendingTX() to describe from what node the TX came from (local node in this case)
+	localPeerNode := NewPeerNode("127.0.0.1", 8085, false, babayaga, true)
 	node := New(dataDir, "127.0.0.1", 8085, andrej, PeerNode{})
 
 	ctx, closeNode := context.WithTimeout(context.Background(), time.Minute*15)
 
 	go func() {
 		time.Sleep(time.Second * 1)
-		tx := database.NewTx(andrej, babayaga, 1, "")
+		tx := database.NewTx(andrej, babayaga, 1, 1, "")
 		signedTx, err := wallet.SignTxWithKeystoreAccount(tx, andrej, resources.TestKsAccountsPwd, wallet.GetKeystoreDirPath(dataDir))
 		if err != nil {
 			t.Error(err)
@@ -78,7 +67,7 @@ func TestNode_Mining(t *testing.T) {
 
 	go func() {
 		time.Sleep(time.Second * 30)
-		tx := database.NewTx(andrej, babayaga, 2, "")
+		tx := database.NewTx(andrej, babayaga, 2, 2, "")
 		signedTx, err := wallet.SignTxWithKeystoreAccount(tx, andrej, resources.TestKsAccountsPwd, wallet.GetKeystoreDirPath(dataDir))
 		if err != nil {
 			t.Error(err)
@@ -147,10 +136,12 @@ func TestNode_MiningStopsOnNewSyncedBlock(t *testing.T) {
 
 	http.DefaultServeMux = new(http.ServeMux)
 	node := New(dataDir, "127.0.0.1", 8085, babayaga, PeerNode{})
-	ctx, closeNode := context.WithTimeout(context.Background(), time.Minute*15)
 
-	tx1 := database.Tx{From: andrej, To: babayaga, Value: 1, Time: 1579451695, Data: ""}
-	tx2 := database.NewTx(andrej, babayaga, 2, "")
+	// Allow the test to run for 30 mins, in the worst case
+	ctx, closeNode := context.WithTimeout(context.Background(), time.Minute*30)
+
+	tx1 := database.NewTx(andrej, babayaga, 1, 1, "")
+	tx2 := database.NewTx(andrej, babayaga, 2, 2, "")
 
 	signedTx1, err := wallet.SignTxWithKeystoreAccount(tx1, andrej, resources.TestKsAccountsPwd, wallet.GetKeystoreDirPath(dataDir))
 	if err != nil {
@@ -276,6 +267,139 @@ func TestNode_MiningStopsOnNewSyncedBlock(t *testing.T) {
 	}
 }
 
+func TestNode_ForgedTx(t *testing.T) {
+	dataDir, andrej, babayaga, err := setupTestNodeDir()
+	assert.NoError(t, err)
+
+	defer utils.RemoveDir(dataDir)
+
+	n := New(dataDir, "127.0.0.1", 8085, andrej, PeerNode{})
+	ctx, closeNode := context.WithTimeout(context.Background(), time.Minute*15)
+	andrejPeerNode := NewPeerNode("127.0.0.1", 8085, false, andrej, true)
+
+	txValue := uint(5)
+	txNonce := uint(1)
+	tx := database.NewTx(andrej, babayaga, txValue, txNonce, "")
+
+	validSignedTx, err := wallet.SignTxWithKeystoreAccount(tx, andrej, resources.TestKsAccountsPwd, wallet.GetKeystoreDirPath(dataDir))
+	if err != nil {
+		t.Fatal(err)
+
+		return
+	}
+
+	_ = n.AddPendingTX(validSignedTx, andrejPeerNode)
+
+	go func() {
+		ticker := time.NewTicker(time.Second * (miningIntervalSeconds - 3))
+		wasForgedTxAdded := false
+
+		for {
+			select {
+			case <-ticker.C:
+				if !n.state.LatestBlockHash().IsEmpty() {
+					if wasForgedTxAdded && !n.isMining {
+						closeNode()
+						return
+					}
+
+					if !wasForgedTxAdded {
+						// Attempt to forge the same TX but with modified time
+						// Because the TX.time changed, the TX.signature will be considered forged
+						// database.NewTx() changes the TX time
+						forgedTx := database.NewTx(andrej, babayaga, txValue, txNonce, "")
+						// Use the signature from a valid TX
+						forgedSignedTx := database.NewSignedTx(forgedTx, validSignedTx.Sig)
+
+						_ = n.AddPendingTX(forgedSignedTx, andrejPeerNode)
+						wasForgedTxAdded = true
+
+						time.Sleep(time.Second * (miningIntervalSeconds + 3))
+					}
+				}
+			}
+		}
+	}()
+
+	_ = n.Run(ctx)
+
+	if n.state.LatestBlock().Header.Number != 0 {
+		t.Fatal("only one tx was supposed to be mined. the second tx was forged")
+	}
+
+	if n.state.Balances[babayaga] != txValue {
+		t.Fatal("forged tx succeeded")
+	}
+}
+
+func TestNode_ReplayedTx(t *testing.T) {
+	dataDir, andrej, babayaga, err := setupTestNodeDir()
+	if err != nil {
+		t.Error(err)
+	}
+	defer utils.RemoveDir(dataDir)
+
+	n := New(dataDir, "127.0.0.1", 8085, andrej, PeerNode{})
+	ctx, closeNode := context.WithCancel(context.Background())
+	andrejPeerNode := NewPeerNode("127.0.0.1", 8085, false, andrej, true)
+	babayagaPeerNode := NewPeerNode("127.0.0.1", 8086, false, babayaga, true)
+
+	txValue := uint(5)
+	txNonce := uint(1)
+	tx := database.NewTx(andrej, babayaga, txValue, txNonce, "")
+
+	signedTx, err := wallet.SignTxWithKeystoreAccount(tx, andrej, resources.TestKsAccountsPwd, wallet.GetKeystoreDirPath(dataDir))
+	if err != nil {
+		t.Fatal(err)
+
+		return
+	}
+
+	assert.NoError(t, n.AddPendingTX(signedTx, andrejPeerNode))
+
+	go func() {
+		ticker := time.NewTicker(time.Second * (miningIntervalSeconds - 3))
+		wasReplayedTxAdded := false
+
+		for {
+			select {
+			case <-ticker.C:
+				// The Andrej's original TX got mined.
+				// Execute the attack by replaying the TX again!
+				if n.state.LatestBlock().Header.Number == 0 {
+					if wasReplayedTxAdded && !n.isMining {
+						closeNode()
+
+						return
+					}
+
+					if !wasReplayedTxAdded {
+						// Simulate the TX was submitted to different node
+						n.archivedTXs = make(map[string]database.SignedTx)
+
+						// Execute the attack
+						_ = n.AddPendingTX(signedTx, babayagaPeerNode)
+						wasReplayedTxAdded = true
+
+						time.Sleep(time.Second * (miningIntervalSeconds + 3))
+					}
+
+				}
+			}
+		}
+	}()
+
+	_ = n.Run(ctx)
+
+	if n.state.Balances[babayaga] != txValue {
+		t.Fatalf("replayed attack was successful. babayaga balance is:%d should be:%d", n.state.Balances[babayaga], txValue)
+	}
+
+	if n.state.LatestBlock().Header.Number == 1 {
+		t.Fatal("the second block was not suppose to be persisted because it contained a malicious tx")
+	}
+}
+
 // Creates dir like: "/tmp/tbb_test945924586"
 func getTestDataDirPath() (string, error) {
 	return ioutil.TempDir(os.TempDir(), "tbb_test")
@@ -327,4 +451,34 @@ func copyKeystoreFilesIntoTestDataDirPath(dataDir string) error {
 	}
 
 	return nil
+}
+
+// setupTestNodeDir creates a default testing node directory with 2 keystore accounts
+// Remember to remove the dir once test finishes: defer fs.RemoveDir(dataDir)
+func setupTestNodeDir() (dataDir string, andrej, babaYaga common.Address, err error) {
+	babaYaga = database.NewAccount(resources.TestKsBabaYagaAccount)
+	andrej = database.NewAccount(resources.TestKsAndrejAccount)
+
+	dataDir, err = getTestDataDirPath()
+	if err != nil {
+		return "", common.Address{}, common.Address{}, err
+	}
+
+	genesisBalances := make(map[common.Address]uint)
+	genesisBalances[andrej] = 1000000
+	genesis := database.Genesis{Balances: genesisBalances}
+	genesisJson, err := json.Marshal(genesis)
+	if err != nil {
+		return "", common.Address{}, common.Address{}, err
+	}
+
+	if err := database.InitDataDirIfNotExists(dataDir, genesisJson); err != nil {
+		return "", common.Address{}, common.Address{}, err
+	}
+
+	if err := copyKeystoreFilesIntoTestDataDirPath(dataDir); err != nil {
+		return "", common.Address{}, common.Address{}, err
+	}
+
+	return dataDir, andrej, babaYaga, nil
 }

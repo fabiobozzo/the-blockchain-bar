@@ -41,7 +41,8 @@ func txAddHandler(w http.ResponseWriter, r *http.Request, node *Node) {
 	}
 
 	// Build the unsigned transaction
-	tx := database.NewTx(from, to, req.Value, req.Data)
+	nonce := node.state.GetNextNonceByAccount(from)
+	tx := database.NewTx(from, to, req.Value, nonce, req.Data)
 
 	// Decrypt the Private key stored in Keystore file and Sign the TX
 	signedTx, err := wallet.SignTxWithKeystoreAccount(tx, from, req.KeystorePassword, wallet.GetKeystoreDirPath(node.dataDir))
