@@ -15,7 +15,7 @@ type errorResponse struct {
 }
 
 type balancesResponse struct {
-	Hash     database.Hash           `json:"blockHash"`
+	Hash     database.Hash           `json:"block_hash"`
 	Balances map[common.Address]uint `json:"balances"`
 }
 
@@ -24,10 +24,10 @@ type txAddResponse struct {
 }
 
 type statusResponse struct {
-	Hash        database.Hash       `json:"blockHash"`
-	Number      uint64              `json:"blockNumber"`
-	KnownPeers  map[string]PeerNode `json:"peersKnown"`
-	PendingTXs  []database.SignedTx `json:"pendingTXs"`
+	Hash        database.Hash       `json:"block_hash"`
+	Number      uint64              `json:"block_number"`
+	KnownPeers  map[string]PeerNode `json:"peers_known"`
+	PendingTXs  []database.SignedTx `json:"pending_txs"`
 	NodeVersion string              `json:"node_version"`
 	Account     common.Address      `json:"account"`
 }
@@ -61,15 +61,15 @@ func writeErrorResponse(w http.ResponseWriter, err error) {
 	w.Write(jsonErrRes)
 }
 
-func readResponse(r *http.Response, reqBody interface{}) error {
-	reqBodyJson, err := ioutil.ReadAll(r.Body)
+func readResponse(r *http.Response, resBody interface{}) error {
+	resBodyJson, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return fmt.Errorf("unable to read response body. %s", err.Error())
 	}
+
 	defer r.Body.Close()
 
-	err = json.Unmarshal(reqBodyJson, reqBody)
-	if err != nil {
+	if err := json.Unmarshal(resBodyJson, resBody); err != nil {
 		return fmt.Errorf("unable to unmarshal response body. %s", err.Error())
 	}
 

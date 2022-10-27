@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"the-blockchain-bar/database"
-	"the-blockchain-bar/wallet"
 
 	"github.com/caddyserver/certmagic"
 	"github.com/ethereum/go-ethereum/common"
@@ -17,7 +16,7 @@ const (
 	DefaultHTTPPort         = 8080
 	DefaultBootstrapIp      = "node.tbb.web3.coach"
 	DefaultBootstrapPort    = 8080
-	DefaultBootstrapAcc     = wallet.AndrejAccount
+	DefaultBootstrapAcc     = "0x09ee50f2f37fcba1845de6fe5c762e83e65e755c"
 	DefaultMiner            = "0x0000000000000000000000000000000000000000"
 	DefaultMiningDifficulty = 3
 	HttpSSLPort             = 443
@@ -105,8 +104,6 @@ func (pn PeerNode) TcpAddress() string {
 }
 
 func (n *Node) Run(ctx context.Context, isSSLDisabled bool, sslEmail string) error {
-	fmt.Println(fmt.Sprintf("Listening on %s:%d", n.info.IP, n.info.Port))
-
 	state, err := database.NewStateFromDisk(n.dataDir, n.miningDifficulty)
 	if err != nil {
 		return err
@@ -206,8 +203,10 @@ func (n *Node) startHttpServer(ctx context.Context, isSSLDisabled bool, sslEmail
 			_ = server.Close()
 		}()
 
+		fmt.Println(fmt.Sprintf("Listening on %s:%d", n.info.IP, n.info.Port))
+
 		// This shouldn't be an error!
-		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			return err
 		}
 

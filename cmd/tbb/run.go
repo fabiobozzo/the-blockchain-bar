@@ -62,10 +62,10 @@ func runCmd() *cobra.Command {
 	runCmd.Flags().String(flagSSLEmail, "", "your node's HTTP SSL certificate email")
 	runCmd.Flags().String(flagMiner, node.DefaultMiner, "miner account of this node to receive block rewards")
 	runCmd.Flags().String(flagIP, node.DefaultIP, "exposed IP for communication with peers")
-	runCmd.Flags().Uint64(flagPort, node.DefaultHTTPPort, "exposed http port for communication with peers")
+	runCmd.Flags().Uint64(flagPort, node.HttpSSLPort, "exposed http port for communication with peers")
 	runCmd.Flags().String(flagBootstrapIp, node.DefaultBootstrapIp, "default bootstrap server to interconnect peers")
-	runCmd.Flags().Uint64(flagBootstrapPort, node.DefaultBootstrapPort, "default bootstrap server port to interconnect peers")
-	runCmd.Flags().String(flagBootstrapAcc, node.DefaultBootstrapAcc, "default bootstrap account to interconnect peers")
+	runCmd.Flags().Uint64(flagBootstrapPort, node.HttpSSLPort, "default bootstrap server port to interconnect peers")
+	runCmd.Flags().String(flagBootstrapAcc, node.DefaultBootstrapAcc, "default bootstrap w/ 1M TBB tokens Genesis account")
 
 	return runCmd
 }

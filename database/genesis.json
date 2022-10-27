@@ -1,8 +1,8 @@
 {
-  "genesis_time": "2022-08-22T00:00:00.000000000Z",
+  "genesis_time": "2020-06-01T00:00:00.000000000Z",
   "chain_id": "the-blockchain-bar-ledger",
   "balances": {
-    "0x22ba1F80452E6220c7cc6ea2D1e3EEDDaC5F694A": 1000000
+    "0x09eE50f2F37FcBA1845dE6FE5C762E83E65E755c": 1000000
   },
   "symbol": "TBB",
   "fork_tip_1": 35
