@@ -410,6 +410,7 @@ func TestNode_ReplayedTx(t *testing.T) {
 func TestNode_MiningSpamTransactions(t *testing.T) {
 	andrejBalance := uint(1000)
 	babayagaBalance := uint(0)
+	minerBalance := uint(0)
 
 	dataDir, andrej, babayaga, err := setupTestNodeDir(andrejBalance)
 	if err != nil {
@@ -418,15 +419,25 @@ func TestNode_MiningSpamTransactions(t *testing.T) {
 
 	defer utils.RemoveDir(dataDir)
 
-	n := New(dataDir, "127.0.0.1", 8085, andrej, PeerNode{})
+	minerKey, err := wallet.NewRandomKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	miner := minerKey.Address
+
+	n := New(dataDir, "127.0.0.1", 8085, miner, PeerNode{})
 	ctx, closeNode := context.WithCancel(context.Background())
-	andrejPeerNode := NewPeerNode("127.0.0.1", 8085, false, andrej, true)
+	minerPeerNode := NewPeerNode("127.0.0.1", 8085, false, miner, true)
 
 	txValue := uint(200)
 
 	// Schedule 4 transfers from Andrej to Babayaga
 	txCount := uint(4)
 	for i := uint(1); i <= txCount; i++ {
+		// Ensure every TX has a unique timestamp
+		time.Sleep(time.Second)
+
 		txNonce := i
 		tx := database.NewTx(andrej, babayaga, txValue, txNonce, "")
 
@@ -435,7 +446,7 @@ func TestNode_MiningSpamTransactions(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.NoError(t, n.AddPendingTX(signedTx, andrejPeerNode))
+		assert.NoError(t, n.AddPendingTX(signedTx, minerPeerNode))
 	}
 
 	// Periodically check if we mined the block
@@ -456,19 +467,25 @@ func TestNode_MiningSpamTransactions(t *testing.T) {
 	// Run the node, mining and everything in a blocking call (hence the go-routines before)
 	_ = n.Run(ctx, true, "")
 
-	expectedAndrejBalance := andrejBalance - (txCount * txValue) + database.BlockReward
+	expectedAndrejBalance := andrejBalance - (txCount * txValue) - (txCount * database.TxFee)
 	expectedBabayagaBalance := babayagaBalance + (txCount * txValue)
+	expectedMinerBalance := minerBalance + database.BlockReward + (txCount * database.TxFee)
 
 	if n.state.Balances[andrej] != expectedAndrejBalance {
-		t.Fatalf("Andrej balance is incorrect. Expected: %d. Got: %d", expectedAndrejBalance, n.state.Balances[andrej])
+		t.Fatalf("andrej balance is incorrect. expected: %d. got: %d", expectedAndrejBalance, n.state.Balances[andrej])
 	}
 
 	if n.state.Balances[babayaga] != expectedBabayagaBalance {
-		t.Fatalf("BabaYaga balance is incorrect. Expected: %d. Got: %d", expectedBabayagaBalance, n.state.Balances[babayaga])
+		t.Fatalf("babayaga balance is incorrect. expected: %d. got: %d", expectedBabayagaBalance, n.state.Balances[babayaga])
 	}
 
-	t.Logf("Andrej final balance: %d TBB", n.state.Balances[andrej])
-	t.Logf("BabaYaga final balance: %d TBB", n.state.Balances[babayaga])
+	if n.state.Balances[miner] != expectedMinerBalance {
+		t.Errorf("miner balance is incorrect. expected: %d. got: %d", expectedMinerBalance, n.state.Balances[miner])
+	}
+
+	t.Logf("andrej final balance: %d TBB", n.state.Balances[andrej])
+	t.Logf("babayaga final balance: %d TBB", n.state.Balances[babayaga])
+	t.Logf("miner final balance: %d TBB", n.state.Balances[miner])
 }
 
 // Creates dir like: "/tmp/tbb_test945924586"

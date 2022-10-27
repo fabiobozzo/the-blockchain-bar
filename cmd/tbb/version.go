@@ -6,10 +6,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const Major = "1"
+const Major = "2"
 const Minor = "0"
 const Fix = "0"
-const Verbal = "Secure blockchain with decentralized auth and replay attack prevention."
+const Verbal = "Tx GAS"
 
 var versionCmd = &cobra.Command{
 	Use:   "version",

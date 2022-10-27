@@ -2,9 +2,14 @@ package wallet
 
 import (
 	"crypto/ecdsa"
+	"crypto/rand"
 	"io/ioutil"
 	"path/filepath"
 	"the-blockchain-bar/database"
+
+	"github.com/google/uuid"
+
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ethereum/go-ethereum/accounts"
 
@@ -67,4 +72,20 @@ func SignTxWithKeystoreAccount(tx database.Tx, account common.Address, password,
 	}
 
 	return signedTx, nil
+}
+
+func NewRandomKey() (*keystore.Key, error) {
+	privateKeyECDSA, err := ecdsa.GenerateKey(crypto.S256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+
+	id := uuid.New()
+	key := &keystore.Key{
+		Id:         id,
+		Address:    crypto.PubkeyToAddress(privateKeyECDSA.PublicKey),
+		PrivateKey: privateKeyECDSA,
+	}
+
+	return key, nil
 }
