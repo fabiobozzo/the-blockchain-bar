@@ -13,6 +13,8 @@ var genesisJson string
 
 type Genesis struct {
 	Balances map[common.Address]uint `json:"balances"`
+	Symbol   string                  `json:"symbol"`
+	ForkTIP1 uint64                  `json:"fork_tip_1"`
 }
 
 func loadGenesis(path string) (Genesis, error) {

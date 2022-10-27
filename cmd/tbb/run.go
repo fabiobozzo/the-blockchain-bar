@@ -32,18 +32,22 @@ func runCmd() *cobra.Command {
 				true,
 				database.NewAccount(bootstrapAcc),
 				false,
+				"",
 			)
 
 			if !isSSLDisabled {
 				port = node.DefaultHTTPPort
 			}
 
+			version := fmt.Sprintf("%s.%s.%s-alpha %s %s", Major, Minor, Fix, shortGitCommit(GitCommit), Verbal)
 			theNode := node.New(
 				getDataDirFromCmd(cmd),
 				ip,
 				port,
 				database.NewAccount(miner),
 				bootstrap,
+				version,
+				node.DefaultMiningDifficulty,
 			)
 
 			if err := theNode.Run(context.Background(), isSSLDisabled, sslEmail); err != nil {

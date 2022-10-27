@@ -13,11 +13,11 @@ func TestIsBlockHashValid(t *testing.T) {
 		wantValid bool
 	}{
 		"valid": {
-			hexHash:   "000000fa04f8160395c387277f8b2f14837603383d33809a4db586086168edfa",
+			hexHash:   "0000fa04f8160395c387277f8b2f14837603383d33809a4db586086168edfa",
 			wantValid: true,
 		},
 		"invalid": {
-			hexHash:   "010001fa04f8160395c387277f8b2f14837603383d33809a4db586086168edfa",
+			hexHash:   "0001fa04f8160395c387277f8b2f14837603383d33809a4db586086168edfa",
 			wantValid: false,
 		},
 	}
@@ -28,7 +28,7 @@ func TestIsBlockHashValid(t *testing.T) {
 			_, err := hex.Decode(hash[:], []byte(tc.hexHash))
 			assert.NoError(t, err)
 
-			assert.Equal(t, tc.wantValid, IsBlockHashValid(hash))
+			assert.Equal(t, tc.wantValid, IsBlockHashValid(hash, 2)) // 4 leading zeros to be valid
 		})
 	}
 }

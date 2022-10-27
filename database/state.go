@@ -10,8 +10,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// TxFee is the Gas Price
-const TxFee = uint(50)
+const (
+	TxFee             = uint(50) // TxFee is the Gas Price
+	TxGas             = 21
+	TxGasPriceDefault = 1
+)
 
 type State struct {
 	Balances       map[common.Address]uint
@@ -19,12 +22,14 @@ type State struct {
 
 	dbFile *os.File
 
-	latestBlock     Block
-	latestBlockHash Hash
-	hasGenesisBlock bool
+	latestBlock      Block
+	latestBlockHash  Hash
+	hasGenesisBlock  bool
+	miningDifficulty uint
+	forkTIP1         uint64
 }
 
-func NewStateFromDisk(dataDir string) (*State, error) {
+func NewStateFromDisk(dataDir string, miningDifficulty uint) (*State, error) {
 	if err := InitDataDirIfNotExists(dataDir, []byte(genesisJson)); err != nil {
 		return nil, err
 	}
@@ -35,11 +40,13 @@ func NewStateFromDisk(dataDir string) (*State, error) {
 	}
 
 	state := &State{
-		Balances:        map[common.Address]uint{},
-		AccountToNonce:  map[common.Address]uint{},
-		latestBlockHash: Hash{},
-		latestBlock:     Block{},
-		hasGenesisBlock: false,
+		Balances:         map[common.Address]uint{},
+		AccountToNonce:   map[common.Address]uint{},
+		latestBlockHash:  Hash{},
+		latestBlock:      Block{},
+		hasGenesisBlock:  false,
+		miningDifficulty: miningDifficulty,
+		forkTIP1:         genesis.ForkTIP1,
 	}
 
 	for account, balance := range genesis.Balances {
@@ -137,12 +144,21 @@ func (s *State) AddBlock(b Block) (hash Hash, err error) {
 	s.latestBlockHash = blockHash
 	s.latestBlock = b
 	s.hasGenesisBlock = true
+	s.miningDifficulty = pendingState.miningDifficulty
 
 	return blockHash, nil
 }
 
 func (s *State) GetNextNonceByAccount(account common.Address) uint {
 	return s.AccountToNonce[account] + 1
+}
+
+func (s *State) ChangeMiningDifficulty(newDifficulty uint) {
+	s.miningDifficulty = newDifficulty
+}
+
+func (s *State) IsTIP1Fork() bool {
+	return s.LatestBlock().Header.Number >= s.forkTIP1
 }
 
 func (s *State) Close() error {
@@ -156,6 +172,8 @@ func (s *State) copy() State {
 	c.hasGenesisBlock = s.hasGenesisBlock
 	c.Balances = make(map[common.Address]uint)
 	c.AccountToNonce = make(map[common.Address]uint)
+	c.miningDifficulty = s.miningDifficulty
+	c.forkTIP1 = s.forkTIP1
 
 	for acc, balance := range s.Balances {
 		c.Balances[acc] = balance
@@ -186,7 +204,7 @@ func applyBlock(b Block, s *State) error {
 		return err
 	}
 
-	if !IsBlockHashValid(hash) {
+	if !IsBlockHashValid(hash, s.miningDifficulty) {
 		return fmt.Errorf("invalid block hash %x", hash)
 	}
 
@@ -195,7 +213,12 @@ func applyBlock(b Block, s *State) error {
 	}
 
 	s.Balances[b.Header.Miner] += BlockReward
-	s.Balances[b.Header.Miner] += uint(len(b.TXs)) * TxFee
+
+	if s.IsTIP1Fork() {
+		s.Balances[b.Header.Miner] += b.GasReward()
+	} else {
+		s.Balances[b.Header.Miner] += uint(len(b.TXs)) * TxFee
+	}
 
 	return nil
 }
@@ -217,6 +240,19 @@ func applyTXs(txs []SignedTx, s *State) error {
 }
 
 func applyTx(tx SignedTx, s *State) error {
+	if err := validateTx(tx, s); err != nil {
+		return err
+	}
+
+	s.Balances[tx.From] -= tx.Cost(s.IsTIP1Fork())
+	s.Balances[tx.To] += tx.Value
+
+	s.AccountToNonce[tx.From] = tx.Nonce
+
+	return nil
+}
+
+func validateTx(tx SignedTx, s *State) error {
 	validTx, err := tx.IsAuthentic()
 	if err != nil {
 		return err
@@ -231,15 +267,16 @@ func applyTx(tx SignedTx, s *State) error {
 		return fmt.Errorf("wrong tx. sender '%s' next nonce must be '%d', not '%d'", tx.From.String(), expectedNonce, tx.Nonce)
 	}
 
-	txCost := tx.Value + TxFee
-	if txCost > s.Balances[tx.From] {
-		return fmt.Errorf("wrong TX. Sender '%s' balance is %d TBB. Tx cost is %d TBB", tx.From.String(), s.Balances[tx.From], tx.Value)
+	if s.IsTIP1Fork() {
+		// Now, we only have one action type, transfer TXs, so all TXs must pay 21 gas like on Ethereum (21 000)
+		if tx.Gas != TxGas {
+			return fmt.Errorf("insufficient tx gas %v. required: %v", tx.Gas, TxGas)
+		}
 	}
 
-	s.Balances[tx.From] -= txCost
-	s.Balances[tx.To] += tx.Value
-
-	s.AccountToNonce[tx.From] = expectedNonce
+	if tx.Cost(s.IsTIP1Fork()) > s.Balances[tx.From] {
+		return fmt.Errorf("wrong tx. sender '%s' balance is %d TBB. tx cost is %d TBB", tx.From.String(), s.Balances[tx.From], tx.Cost(s.IsTIP1Fork()))
+	}
 
 	return nil
 }

@@ -13,6 +13,8 @@ type txAddRequest struct {
 	Value            uint   `json:"value"`
 	Data             string `json:"data"`
 	KeystorePassword string `json:"pwd"`
+	Gas              uint   `json:"gas"`
+	GasPrice         uint   `json:"gas_price"`
 }
 
 func requestFromBody(r *http.Request, target interface{}) error {

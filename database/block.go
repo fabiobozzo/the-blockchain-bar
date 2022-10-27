@@ -23,6 +23,11 @@ type BlockHeader struct {
 	Miner  common.Address `json:"miner"`
 }
 
+type BlockFS struct {
+	Key   Hash  `json:"hash"`
+	Value Block `json:"block"`
+}
+
 func NewBlock(parent Hash, number uint64, nonce uint32, time uint64, miner common.Address, txs []SignedTx) Block {
 	return Block{BlockHeader{parent, number, nonce, time, miner}, txs}
 }
@@ -36,14 +41,28 @@ func (b Block) Hash() (hash Hash, err error) {
 	return sha256.Sum256(blockJson), nil
 }
 
-type BlockFS struct {
-	Key   Hash  `json:"hash"`
-	Value Block `json:"block"`
+func (b Block) GasReward() uint {
+	reward := uint(0)
+
+	for _, tx := range b.TXs {
+		reward += tx.GasCost()
+	}
+
+	return reward
 }
 
-func IsBlockHashValid(hash Hash) bool {
-	return fmt.Sprintf("%x", hash[0]) == "0" &&
-		fmt.Sprintf("%x", hash[1]) == "0" &&
-		fmt.Sprintf("%x", hash[2]) == "0" &&
-		fmt.Sprintf("%x", hash[3]) != "0"
+func IsBlockHashValid(hash Hash, miningDifficulty uint) bool {
+	zeroesCount := uint(0)
+
+	for i := uint(0); i < miningDifficulty; i++ {
+		if fmt.Sprintf("%x", hash[i]) == "0" {
+			zeroesCount++
+		}
+	}
+
+	if fmt.Sprintf("%x", hash[miningDifficulty]) == "0" {
+		return false
+	}
+
+	return zeroesCount == miningDifficulty
 }

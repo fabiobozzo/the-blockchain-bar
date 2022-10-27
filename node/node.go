@@ -13,12 +13,14 @@ import (
 )
 
 const (
-	DefaultIP            = "127.0.0.1"
-	DefaultHTTPPort      = 8080
-	DefaultBootstrapIp   = "node.tbb.web3.coach"
-	DefaultBootstrapPort = 8080
-	DefaultBootstrapAcc  = wallet.AndrejAccount
-	DefaultMiner         = "0x0000000000000000000000000000000000000000"
+	DefaultIP               = "127.0.0.1"
+	DefaultHTTPPort         = 8080
+	DefaultBootstrapIp      = "node.tbb.web3.coach"
+	DefaultBootstrapPort    = 8080
+	DefaultBootstrapAcc     = wallet.AndrejAccount
+	DefaultMiner            = "0x0000000000000000000000000000000000000000"
+	DefaultMiningDifficulty = 3
+	HttpSSLPort             = 443
 
 	endpointBalances = "/balances/list"
 	endpointStatus   = "/node/status"
@@ -27,15 +29,17 @@ const (
 	endpointSync                  = "/node/sync"
 	endpointSyncQueryKeyFromBlock = "fromBlock"
 
-	endpointAddPeer              = "/node/peer"
-	endpointAddPeerQueryKeyIP    = "ip"
-	endpointAddPeerQueryKeyPort  = "port"
-	endpointAddPeerQueryKeyMiner = "miner"
+	endpointAddPeer                = "/node/peer"
+	endpointAddPeerQueryKeyIP      = "ip"
+	endpointAddPeerQueryKeyPort    = "port"
+	endpointAddPeerQueryKeyMiner   = "miner"
+	endpointAddPeerQueryKeyVersion = "version"
 
 	miningIntervalSeconds = 10
 )
 
 type PeerNode struct {
+	NodeVersion string         `json:"node_version"`
 	IP          string         `json:"ip"`
 	Port        uint64         `json:"port"`
 	IsBootstrap bool           `json:"isBootstrap"`
@@ -46,45 +50,64 @@ type PeerNode struct {
 }
 
 type Node struct {
-	dataDir         string
-	info            PeerNode
-	state           *database.State
-	knownPeers      map[string]PeerNode
-	pendingTXs      map[string]database.SignedTx
-	archivedTXs     map[string]database.SignedTx
-	newSyncedBlocks chan database.Block
-	newPendingTXs   chan database.SignedTx
-	isMining        bool
+	nodeVersion      string
+	dataDir          string
+	info             PeerNode
+	state            *database.State
+	knownPeers       map[string]PeerNode
+	pendingTXs       map[string]database.SignedTx
+	archivedTXs      map[string]database.SignedTx
+	newSyncedBlocks  chan database.Block
+	newPendingTXs    chan database.SignedTx
+	isMining         bool
+	miningDifficulty uint // number of zeroes the hash must start with to be considered valid. default: 3
 }
 
-func New(dataDir string, ip string, port uint64, account common.Address, bootstrap PeerNode) *Node {
+func New(dataDir string, ip string, port uint64, account common.Address, bootstrap PeerNode, version string, miningDifficulty uint) *Node {
 	knownPeers := make(map[string]PeerNode)
 	knownPeers[bootstrap.TcpAddress()] = bootstrap
 
 	return &Node{
-		dataDir:         dataDir,
-		info:            NewPeerNode(ip, port, false, account, true),
-		knownPeers:      knownPeers,
-		pendingTXs:      make(map[string]database.SignedTx),
-		archivedTXs:     make(map[string]database.SignedTx),
-		newSyncedBlocks: make(chan database.Block),
-		newPendingTXs:   make(chan database.SignedTx, 10000),
-		isMining:        false,
+		dataDir:          dataDir,
+		info:             NewPeerNode(ip, port, false, account, true, version),
+		knownPeers:       knownPeers,
+		pendingTXs:       make(map[string]database.SignedTx),
+		archivedTXs:      make(map[string]database.SignedTx),
+		newSyncedBlocks:  make(chan database.Block),
+		newPendingTXs:    make(chan database.SignedTx, 10000),
+		isMining:         false,
+		miningDifficulty: miningDifficulty,
+		nodeVersion:      version,
 	}
 }
 
-func NewPeerNode(ip string, port uint64, isBootstrap bool, account common.Address, connected bool) PeerNode {
-	return PeerNode{ip, port, isBootstrap, account, connected}
+func NewPeerNode(ip string, port uint64, isBootstrap bool, account common.Address, connected bool, version string) PeerNode {
+	return PeerNode{
+		version,
+		ip,
+		port,
+		isBootstrap,
+		account,
+		connected,
+	}
 }
 
-func (p PeerNode) TcpAddress() string {
-	return fmt.Sprintf("%s:%d", p.IP, p.Port)
+func (pn PeerNode) ApiProtocol() string {
+	if pn.Port == HttpSSLPort {
+		return "https"
+	}
+
+	return "http"
+}
+
+func (pn PeerNode) TcpAddress() string {
+	return fmt.Sprintf("%s:%d", pn.IP, pn.Port)
 }
 
 func (n *Node) Run(ctx context.Context, isSSLDisabled bool, sslEmail string) error {
 	fmt.Println(fmt.Sprintf("Listening on %s:%d", n.info.IP, n.info.Port))
 
-	state, err := database.NewStateFromDisk(n.dataDir)
+	state, err := database.NewStateFromDisk(n.dataDir, n.miningDifficulty)
 	if err != nil {
 		return err
 	}
@@ -145,6 +168,11 @@ func (n *Node) AddPendingTX(signedTx database.SignedTx, fromPeer PeerNode) error
 	}
 
 	return nil
+}
+
+func (n *Node) ChangeMiningDifficulty(newDifficulty uint) {
+	n.miningDifficulty = newDifficulty
+	n.state.ChangeMiningDifficulty(newDifficulty)
 }
 
 func (n *Node) startHttpServer(ctx context.Context, isSSLDisabled bool, sslEmail string) error {

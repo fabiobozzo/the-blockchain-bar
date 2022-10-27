@@ -28,7 +28,7 @@ func TestSignTxWithKeystoreAccount(t *testing.T) {
 	babayaga, err := NewKeystoreAccount(tmpDir, testKeystoreAccountsPwd)
 	assert.NoError(t, err)
 
-	tx := database.NewTx(andrej, babayaga, 100, 1, "")
+	tx := database.NewBaseTx(andrej, babayaga, 100, 1, "")
 
 	signedTx, err := SignTxWithKeystoreAccount(tx, andrej, testKeystoreAccountsPwd, GetKeystoreDirPath(tmpDir))
 	assert.NoError(t, err)
@@ -55,7 +55,7 @@ func TestSignForgedTxWithKeystoreAccount(t *testing.T) {
 	babayaga, err := NewKeystoreAccount(tmpDir, testKeystoreAccountsPwd)
 	assert.NoError(t, err)
 
-	forgedTx := database.NewTx(babayaga, hacker, 100, 1, "")
+	forgedTx := database.NewBaseTx(babayaga, hacker, 100, 1, "")
 
 	signedTx, err := SignTxWithKeystoreAccount(forgedTx, hacker, testKeystoreAccountsPwd, GetKeystoreDirPath(tmpDir))
 	assert.NoError(t, err)

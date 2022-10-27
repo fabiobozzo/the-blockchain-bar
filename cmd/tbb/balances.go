@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"the-blockchain-bar/database"
+	"the-blockchain-bar/node"
 
 	"github.com/spf13/cobra"
 )
@@ -29,7 +30,7 @@ func balancesListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "Lists all balances.",
 		Run: func(cmd *cobra.Command, args []string) {
-			state, err := database.NewStateFromDisk(getDataDirFromCmd(cmd))
+			state, err := database.NewStateFromDisk(getDataDirFromCmd(cmd), node.DefaultMiningDifficulty)
 			if err != nil {
 				fatal(err)
 			}

@@ -3,5 +3,7 @@
   "chain_id": "the-blockchain-bar-ledger",
   "balances": {
     "0x22ba1F80452E6220c7cc6ea2D1e3EEDDaC5F694A": 1000000
-  }
+  },
+  "symbol": "TBB",
+  "fork_tip_1": 35
 }

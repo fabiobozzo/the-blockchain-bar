@@ -30,7 +30,7 @@ func NewPendingBlock(parent database.Hash, number uint64, miner common.Address, 
 	}
 }
 
-func Mine(ctx context.Context, pb PendingBlock) (database.Block, error) {
+func Mine(ctx context.Context, pb PendingBlock, miningDifficulty uint) (database.Block, error) {
 	if len(pb.txs) == 0 {
 		return database.Block{}, errors.New("mining empty blocks is not allowed")
 	}
@@ -41,7 +41,7 @@ func Mine(ctx context.Context, pb PendingBlock) (database.Block, error) {
 	var hash database.Hash
 	var nonce uint32
 
-	for !database.IsBlockHashValid(hash) {
+	for !database.IsBlockHashValid(hash, miningDifficulty) {
 		select {
 		case <-ctx.Done():
 			fmt.Println("mining cancelled")

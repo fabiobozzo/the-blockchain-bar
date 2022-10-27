@@ -24,10 +24,12 @@ type txAddResponse struct {
 }
 
 type statusResponse struct {
-	Hash       database.Hash       `json:"blockHash"`
-	Number     uint64              `json:"blockNumber"`
-	KnownPeers map[string]PeerNode `json:"peersKnown"`
-	PendingTXs []database.SignedTx `json:"pendingTXs"`
+	Hash        database.Hash       `json:"blockHash"`
+	Number      uint64              `json:"blockNumber"`
+	KnownPeers  map[string]PeerNode `json:"peersKnown"`
+	PendingTXs  []database.SignedTx `json:"pendingTXs"`
+	NodeVersion string              `json:"node_version"`
+	Account     common.Address      `json:"account"`
 }
 
 type syncResponse struct {

@@ -51,7 +51,7 @@ func (n *Node) minePendingTXs(ctx context.Context) error {
 		n.getPendingTXsAsArray(),
 	)
 
-	minedBlock, err := miner.Mine(ctx, blockToMine)
+	minedBlock, err := miner.Mine(ctx, blockToMine, n.miningDifficulty)
 	if err != nil {
 		return err
 	}

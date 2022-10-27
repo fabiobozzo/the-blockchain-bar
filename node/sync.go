@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"the-blockchain-bar/database"
 	"time"
 )
@@ -68,13 +69,18 @@ func (n *Node) joinKnownPeers(peer PeerNode) error {
 	}
 
 	url := fmt.Sprintf(
-		"http://%s%s?%s=%s&%s=%d",
+		"%s://%s%s?%s=%s&%s=%d&%s=%s&%s=%s",
+		peer.ApiProtocol(),
 		peer.TcpAddress(),
 		endpointAddPeer,
 		endpointAddPeerQueryKeyIP,
 		n.info.IP,
 		endpointAddPeerQueryKeyPort,
 		n.info.Port,
+		endpointAddPeerQueryKeyMiner,
+		n.info.Account.String(),
+		endpointAddPeerQueryKeyVersion,
+		url.QueryEscape(n.info.NodeVersion),
 	)
 
 	rawResponse, err := http.Get(url)

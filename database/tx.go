@@ -22,6 +22,9 @@ type Tx struct {
 	Nonce uint           `json:"nonce"`
 	Data  string         `json:"data"`
 	Time  uint64         `json:"time"`
+
+	Gas      uint `json:"gas"`
+	GasPrice uint `json:"gasPrice"`
 }
 
 type SignedTx struct {
@@ -29,8 +32,21 @@ type SignedTx struct {
 	Sig []byte `json:"signature"`
 }
 
-func NewTx(from, to common.Address, value, nonce uint, data string) Tx {
-	return Tx{from, to, value, nonce, data, uint64(time.Now().Unix())}
+func NewTx(from, to common.Address, value, nonce, gas, gasPrice uint, data string) Tx {
+	return Tx{
+		from,
+		to,
+		value,
+		nonce,
+		data,
+		uint64(time.Now().Unix()),
+		gas,
+		gasPrice,
+	}
+}
+
+func NewBaseTx(from, to common.Address, value, nonce uint, data string) Tx {
+	return NewTx(from, to, value, nonce, TxGas, TxGasPriceDefault, data)
 }
 
 func NewSignedTx(tx Tx, sig []byte) SignedTx {
@@ -52,6 +68,18 @@ func (t Tx) Hash() (Hash, error) {
 	}
 
 	return sha256.Sum256(txJson), nil
+}
+
+func (t Tx) Cost(isTip1Fork bool) uint {
+	if isTip1Fork {
+		return t.Value + t.GasCost()
+	}
+
+	return t.Value + TxFee
+}
+
+func (t Tx) GasCost() uint {
+	return t.Gas * t.GasPrice
 }
 
 func (t SignedTx) Hash() (Hash, error) {
