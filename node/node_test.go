@@ -34,13 +34,13 @@ func TestNode_Run(t *testing.T) {
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
 
-	if err := n.Run(ctx); err != http.ErrServerClosed {
+	if err := n.Run(ctx, true, ""); err != http.ErrServerClosed {
 		t.Fatalf("node server was suppose to close after 5s, instead: %s", err)
 	}
 }
 
 func TestNode_Mining(t *testing.T) {
-	dataDir, andrej, babayaga, err := setupTestNodeDir()
+	dataDir, andrej, babayaga, err := setupTestNodeDir(1000000)
 	assert.NoError(t, err)
 	defer utils.RemoveDir(dataDir)
 
@@ -52,7 +52,7 @@ func TestNode_Mining(t *testing.T) {
 	// Construct a new Node instance and configure Andrej as a miner
 	node := New(dataDir, "127.0.0.1", 8085, andrej, PeerNode{})
 
-	// Allow the mining to run for 30 mins, in the worst case
+	// Allow the mining to run for 30 minutes, in the worst case
 	ctx, closeNode := context.WithTimeout(context.Background(), time.Minute*30)
 
 	// Schedule a new TX in 3 seconds from now, in a separate thread because the n.Run() few lines below is a blocking call
@@ -99,7 +99,7 @@ func TestNode_Mining(t *testing.T) {
 	}()
 
 	// Run the node, mining and everything in a blocking call (hence the go-routines before)
-	_ = node.Run(ctx)
+	_ = node.Run(ctx, true, "")
 
 	if node.state.LatestBlock().Header.Number != 1 {
 		t.Fatal("was suppose to mine 2 pending tx into 2 valid blocks under 30m")
@@ -263,7 +263,7 @@ func TestNode_MiningStopsOnNewSyncedBlock(t *testing.T) {
 		t.Logf("ending babayaga balance: %d", endBabayagaBalance)
 	}()
 
-	_ = node.Run(ctx)
+	_ = node.Run(ctx, true, "")
 
 	if node.state.LatestBlock().Header.Number != 1 {
 		t.Fatal("was suppose to mine 2 pending TX into 2 valid blocks under 30m")
@@ -275,7 +275,7 @@ func TestNode_MiningStopsOnNewSyncedBlock(t *testing.T) {
 }
 
 func TestNode_ForgedTx(t *testing.T) {
-	dataDir, andrej, babayaga, err := setupTestNodeDir()
+	dataDir, andrej, babayaga, err := setupTestNodeDir(1000000)
 	assert.NoError(t, err)
 
 	defer utils.RemoveDir(dataDir)
@@ -328,7 +328,7 @@ func TestNode_ForgedTx(t *testing.T) {
 		}
 	}()
 
-	_ = n.Run(ctx)
+	_ = n.Run(ctx, true, "")
 
 	if n.state.LatestBlock().Header.Number != 0 {
 		t.Fatal("only one tx was supposed to be mined. the second tx was forged")
@@ -340,7 +340,7 @@ func TestNode_ForgedTx(t *testing.T) {
 }
 
 func TestNode_ReplayedTx(t *testing.T) {
-	dataDir, andrej, babayaga, err := setupTestNodeDir()
+	dataDir, andrej, babayaga, err := setupTestNodeDir(1000000)
 	if err != nil {
 		t.Error(err)
 	}
@@ -396,7 +396,7 @@ func TestNode_ReplayedTx(t *testing.T) {
 		}
 	}()
 
-	_ = n.Run(ctx)
+	_ = n.Run(ctx, true, "")
 
 	if n.state.Balances[babayaga] != txValue {
 		t.Fatalf("replayed attack was successful. babayaga balance is:%d should be:%d", n.state.Balances[babayaga], txValue)
@@ -405,6 +405,70 @@ func TestNode_ReplayedTx(t *testing.T) {
 	if n.state.LatestBlock().Header.Number == 1 {
 		t.Fatal("the second block was not suppose to be persisted because it contained a malicious tx")
 	}
+}
+
+func TestNode_MiningSpamTransactions(t *testing.T) {
+	andrejBalance := uint(1000)
+	babayagaBalance := uint(0)
+
+	dataDir, andrej, babayaga, err := setupTestNodeDir(andrejBalance)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer utils.RemoveDir(dataDir)
+
+	n := New(dataDir, "127.0.0.1", 8085, andrej, PeerNode{})
+	ctx, closeNode := context.WithCancel(context.Background())
+	andrejPeerNode := NewPeerNode("127.0.0.1", 8085, false, andrej, true)
+
+	txValue := uint(200)
+
+	// Schedule 4 transfers from Andrej to Babayaga
+	txCount := uint(4)
+	for i := uint(1); i <= txCount; i++ {
+		txNonce := i
+		tx := database.NewTx(andrej, babayaga, txValue, txNonce, "")
+
+		signedTx, err := wallet.SignTxWithKeystoreAccount(tx, andrej, resources.TestKsAccountsPwd, wallet.GetKeystoreDirPath(dataDir))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.NoError(t, n.AddPendingTX(signedTx, andrejPeerNode))
+	}
+
+	// Periodically check if we mined the block
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				if !n.state.LatestBlockHash().IsEmpty() {
+					closeNode()
+
+					return
+				}
+			}
+		}
+	}()
+
+	// Run the node, mining and everything in a blocking call (hence the go-routines before)
+	_ = n.Run(ctx, true, "")
+
+	expectedAndrejBalance := andrejBalance - (txCount * txValue) + database.BlockReward
+	expectedBabayagaBalance := babayagaBalance + (txCount * txValue)
+
+	if n.state.Balances[andrej] != expectedAndrejBalance {
+		t.Fatalf("Andrej balance is incorrect. Expected: %d. Got: %d", expectedAndrejBalance, n.state.Balances[andrej])
+	}
+
+	if n.state.Balances[babayaga] != expectedBabayagaBalance {
+		t.Fatalf("BabaYaga balance is incorrect. Expected: %d. Got: %d", expectedBabayagaBalance, n.state.Balances[babayaga])
+	}
+
+	t.Logf("Andrej final balance: %d TBB", n.state.Balances[andrej])
+	t.Logf("BabaYaga final balance: %d TBB", n.state.Balances[babayaga])
 }
 
 // Creates dir like: "/tmp/tbb_test945924586"
@@ -462,8 +526,8 @@ func copyKeystoreFilesIntoTestDataDirPath(dataDir string) error {
 
 // setupTestNodeDir creates a default testing node directory with 2 keystore accounts
 // Remember to remove the dir once test finishes: defer fs.RemoveDir(dataDir)
-func setupTestNodeDir() (dataDir string, andrej, babaYaga common.Address, err error) {
-	babaYaga = database.NewAccount(resources.TestKsBabaYagaAccount)
+func setupTestNodeDir(andrejBalance uint) (dataDir string, andrej, babayaga common.Address, err error) {
+	babayaga = database.NewAccount(resources.TestKsBabaYagaAccount)
 	andrej = database.NewAccount(resources.TestKsAndrejAccount)
 
 	dataDir, err = getTestDataDirPath()
@@ -472,7 +536,7 @@ func setupTestNodeDir() (dataDir string, andrej, babaYaga common.Address, err er
 	}
 
 	genesisBalances := make(map[common.Address]uint)
-	genesisBalances[andrej] = 1000000
+	genesisBalances[andrej] = andrejBalance
 	genesis := database.Genesis{Balances: genesisBalances}
 	genesisJson, err := json.Marshal(genesis)
 	if err != nil {
@@ -487,5 +551,5 @@ func setupTestNodeDir() (dataDir string, andrej, babaYaga common.Address, err er
 		return "", common.Address{}, common.Address{}, err
 	}
 
-	return dataDir, andrej, babaYaga, nil
+	return dataDir, andrej, babayaga, nil
 }

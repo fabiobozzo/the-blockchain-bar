@@ -15,6 +15,8 @@ const (
 	flagBootstrapAcc  = "bootstrap-account"
 	flagBootstrapIp   = "bootstrap-ip"
 	flagBootstrapPort = "bootstrap-port"
+	flagSSLEmail      = "ssl-email"
+	flagDisableSSL    = "disable-ssl"
 )
 
 var ErrIncorrectUsage = errors.New("incorrect usage of tbb command")

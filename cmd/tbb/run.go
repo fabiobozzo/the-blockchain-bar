@@ -15,6 +15,8 @@ func runCmd() *cobra.Command {
 		Use:   "run",
 		Short: "Launches the TBB node and its HTTP API.",
 		Run: func(cmd *cobra.Command, args []string) {
+			sslEmail, _ := cmd.Flags().GetString(flagSSLEmail)
+			isSSLDisabled, _ := cmd.Flags().GetBool(flagDisableSSL)
 			miner, _ := cmd.Flags().GetString(flagMiner)
 			ip, _ := cmd.Flags().GetString(flagIP)
 			port, _ := cmd.Flags().GetUint64(flagPort)
@@ -31,6 +33,11 @@ func runCmd() *cobra.Command {
 				database.NewAccount(bootstrapAcc),
 				false,
 			)
+
+			if !isSSLDisabled {
+				port = node.DefaultHTTPPort
+			}
+
 			theNode := node.New(
 				getDataDirFromCmd(cmd),
 				ip,
@@ -39,7 +46,7 @@ func runCmd() *cobra.Command {
 				bootstrap,
 			)
 
-			if err := theNode.Run(context.Background()); err != nil {
+			if err := theNode.Run(context.Background(), isSSLDisabled, sslEmail); err != nil {
 				fmt.Println(err)
 				os.Exit(1)
 			}
@@ -47,6 +54,8 @@ func runCmd() *cobra.Command {
 	}
 
 	addDefaultRequiredFlags(runCmd)
+	runCmd.Flags().Bool(flagDisableSSL, false, "should the HTTP API SSL certificate be disabled? (default false)")
+	runCmd.Flags().String(flagSSLEmail, "", "your node's HTTP SSL certificate email")
 	runCmd.Flags().String(flagMiner, node.DefaultMiner, "miner account of this node to receive block rewards")
 	runCmd.Flags().String(flagIP, node.DefaultIP, "exposed IP for communication with peers")
 	runCmd.Flags().Uint64(flagPort, node.DefaultHTTPPort, "exposed http port for communication with peers")

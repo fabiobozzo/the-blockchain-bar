@@ -8,6 +8,7 @@ import (
 	"the-blockchain-bar/database"
 	"the-blockchain-bar/wallet"
 
+	"github.com/caddyserver/certmagic"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -80,7 +81,7 @@ func (p PeerNode) TcpAddress() string {
 	return fmt.Sprintf("%s:%d", p.IP, p.Port)
 }
 
-func (n *Node) Run(ctx context.Context) error {
+func (n *Node) Run(ctx context.Context, isSSLDisabled bool, sslEmail string) error {
 	fmt.Println(fmt.Sprintf("Listening on %s:%d", n.info.IP, n.info.Port))
 
 	state, err := database.NewStateFromDisk(n.dataDir)
@@ -98,39 +99,7 @@ func (n *Node) Run(ctx context.Context) error {
 	go n.sync(ctx)
 	go n.mine(ctx)
 
-	router := http.NewServeMux()
-
-	router.HandleFunc(endpointBalances, func(w http.ResponseWriter, r *http.Request) {
-		listBalancesHandler(w, r, state)
-	})
-
-	router.HandleFunc(endpointAddTx, func(w http.ResponseWriter, r *http.Request) {
-		txAddHandler(w, r, n)
-	})
-
-	router.HandleFunc(endpointStatus, func(w http.ResponseWriter, r *http.Request) {
-		statusHandler(w, r, n)
-	})
-
-	router.HandleFunc(endpointSync, func(w http.ResponseWriter, r *http.Request) {
-		syncHandler(w, r, n)
-	})
-
-	router.HandleFunc(endpointAddPeer, func(w http.ResponseWriter, r *http.Request) {
-		addPeerHandler(w, r, n)
-	})
-
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", n.info.Port),
-		Handler: router,
-	}
-
-	go func() {
-		<-ctx.Done()
-		_ = server.Close()
-	}()
-
-	return server.ListenAndServe()
+	return n.startHttpServer(ctx, isSSLDisabled, sslEmail)
 }
 
 func (n *Node) LatestBlockHash() database.Hash {
@@ -173,6 +142,51 @@ func (n *Node) AddPendingTX(signedTx database.SignedTx, fromPeer PeerNode) error
 		fmt.Printf("added Pending TX %s from peer %s\n", txJson, fromPeer.TcpAddress())
 		n.pendingTXs[txHash.Hex()] = signedTx
 		n.newPendingTXs <- signedTx
+	}
+
+	return nil
+}
+
+func (n *Node) startHttpServer(ctx context.Context, isSSLDisabled bool, sslEmail string) error {
+	router := http.NewServeMux()
+
+	router.HandleFunc(endpointBalances, func(w http.ResponseWriter, r *http.Request) {
+		listBalancesHandler(w, r, n.state)
+	})
+
+	router.HandleFunc(endpointAddTx, func(w http.ResponseWriter, r *http.Request) {
+		txAddHandler(w, r, n)
+	})
+
+	router.HandleFunc(endpointStatus, func(w http.ResponseWriter, r *http.Request) {
+		statusHandler(w, r, n)
+	})
+
+	router.HandleFunc(endpointSync, func(w http.ResponseWriter, r *http.Request) {
+		syncHandler(w, r, n)
+	})
+
+	router.HandleFunc(endpointAddPeer, func(w http.ResponseWriter, r *http.Request) {
+		addPeerHandler(w, r, n)
+	})
+
+	if isSSLDisabled {
+		server := &http.Server{Addr: fmt.Sprintf(":%d", n.info.Port), Handler: router}
+
+		go func() {
+			<-ctx.Done()
+			_ = server.Close()
+		}()
+
+		// This shouldn't be an error!
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+			return err
+		}
+
+	} else {
+		certmagic.DefaultACME.Email = sslEmail
+
+		return certmagic.HTTPS([]string{n.info.IP}, router)
 	}
 
 	return nil
