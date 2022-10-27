@@ -1,10 +1,13 @@
 package wallet
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"testing"
 	"the-blockchain-bar/database"
 	"the-blockchain-bar/utils"
+
+	"github.com/test-go/testify/require"
 
 	"github.com/stretchr/testify/assert"
 
@@ -40,7 +43,26 @@ func TestSignTxWithKeystoreAccount(t *testing.T) {
 
 	if !ok {
 		t.Fatal("the tx was signed by 'from' account and should have been authentic")
+
+		return
 	}
+
+	// Test marshaling
+	signedTxJson, err := json.Marshal(signedTx)
+	if err != nil {
+		t.Error(err)
+
+		return
+	}
+
+	var signedTxUnmarshalled database.SignedTx
+	if err = json.Unmarshal(signedTxJson, &signedTxUnmarshalled); err != nil {
+		t.Error(err)
+
+		return
+	}
+
+	require.Equal(t, signedTx, signedTxUnmarshalled)
 }
 
 func TestSignForgedTxWithKeystoreAccount(t *testing.T) {
